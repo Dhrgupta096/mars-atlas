@@ -121,15 +121,41 @@ export default function App() {
     return () => viewer.destroy()
   }, [])
 
-  // A + B set → ask Python for direct line, safest path, and EVA plan
+  // A set → draw 6 km Foot-EVA ring & 12 km Apollo Walk-Back Safety Limit ring; A + B set → fetch routes
   useEffect(() => {
     const ents = viewerRef.current.routeLayer.entities
     ents.removeAll()
     viewerRef.current.hoverPin.show = false
     setRouteData(null)
     setHoverIdx(null)
-    if (route.length < 2) return
+    if (route.length < 1) return
     const [a, b] = route
+    const degPerM = 1 / 59158 // 1° latitude on Mars ≈ 59.16 km
+    const cosLat = Math.max(Math.cos(a.lat * Math.PI / 180), 0.05)
+    for (const [radM, hex, tag] of [[6000, '#5fd38d', '6 KM FOOT EVA LIMIT'], [12000, '#f2c14e', '12 KM ROVER WALK-BACK LIMIT']]) {
+      const col = Cesium.Color.fromCssColorString(hex)
+      const ring = Array.from({ length: 65 }, (_, i) => {
+        const ang = (i / 64) * Math.PI * 2
+        return [a.lon + (radM * degPerM / cosLat) * Math.cos(ang), a.lat + (radM * degPerM) * Math.sin(ang)]
+      }).flat()
+      ents.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, arcType: Cesium.ArcType.NONE,
+          material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.8), dashLength: 10 }),
+        },
+      })
+      ents.add({
+        position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat + radM * degPerM),
+        label: {
+          text: tag, font: '500 10px "JetBrains Mono", ui-monospace, monospace',
+          pixelOffset: new Cesium.Cartesian2(0, -6), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 6e5),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        },
+      })
+    }
+    if (route.length < 2) return
     const positions = r => Cesium.Cartesian3.fromDegreesArray(r.path.flatMap(([la, lo]) => [lo, la]))
     let stale = false
     fetch(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(r => r.json()).then(data => {
@@ -408,6 +434,7 @@ export default function App() {
                 ['Science', r => `${r.science_score}/100`],
                 ['Walk (A↔B)', r => fmtHours(r.walk_round_trip_h)],
                 ['Rover (A↔B)', r => fmtHours(r.rover_round_trip_h)],
+                ['Walk-Back', r => <span style={{ color: r.walkback_ok ? '#5fd38d' : '#e5484d' }}>{fmtHours(r.walk_back_h)} · {r.walkback_ok ? 'OK' : '>4H'}</span>],
               ].map(([name, fmt]) => (
                 <tr key={name}>
                   <th>{name}</th>

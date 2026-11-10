@@ -13,6 +13,7 @@ MAX_GRID = 400      # A* grid edge; bigger areas are downsampled
 WALK_FLAT_KMH = 3.0   # assumed suited walking speed on flat ground
 ROVER_FLAT_KMH = 10.0 # unpressurised rover cruise (Apollo LRV averaged ~8–10 km/h)
 EVA_HOURS = 8         # suit time per EVA (ISS EMU nominal)
+WALKBACK_HOURS = 4.0  # Apollo emergency walk-back suit O₂ reserve if rover fails at B
 
 
 def _unit(lat, lon):
@@ -104,6 +105,8 @@ def _analyse(lats, lons, d) -> dict:
         "max_slope_at": {"lat": round(float(lats[worst]), 4), "lon": round(float(lons[worst]), 4)},
         "risk": risk(float(slopes[worst])),
         "walk_h": round(walk_out, 2),
+        "walk_back_h": round(walk_back, 2),
+        "walkback_ok": bool(walk_back <= WALKBACK_HOURS),
         "walk_round_trip_h": round(walk_out + walk_back, 2),
         "rover_h": round(rover_out, 2),
         "rover_round_trip_h": round(rover_out + rover_back, 2),
@@ -121,7 +124,8 @@ def eva_plan(direct: dict, safe: dict | None, science: dict | None = None) -> di
     if safe["walk_round_trip_h"] <= EVA_HOURS:
         mode, fit = "walk", f"Walking there and back takes {safe['walk_round_trip_h']:.1f} h, inside one {EVA_HOURS} h EVA."
     elif safe["rover_round_trip_h"] <= EVA_HOURS:
-        mode, fit = "rover", f"Too far to walk ({safe['walk_round_trip_h']:.1f} h round trip); by rover it's {safe['rover_round_trip_h']:.1f} h."
+        wb = f"within the {WALKBACK_HOURS:.0f} h walk-back limit ({safe['walk_back_h']:.1f} h B→A)" if safe["walkback_ok"] else f"past the {WALKBACK_HOURS:.0f} h walk-back limit ({safe['walk_back_h']:.1f} h B→A; buddy rover required)"
+        mode, fit = "rover", f"Too far to walk ({safe['walk_round_trip_h']:.1f} h round trip); by rover it's {safe['rover_round_trip_h']:.1f} h ({wb})."
     else:
         mode, fit = "expedition", f"Too far for one {EVA_HOURS} h EVA even by rover ({safe['rover_round_trip_h']:.1f} h). Needs a multi-sol expedition."
     extra_km = (safe["distance_m"] - direct["distance_m"]) / 1000
