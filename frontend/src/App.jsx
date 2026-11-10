@@ -27,6 +27,7 @@ const fmtDeg = (v, pos, neg) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? pos : neg
 const fmtHours = h => h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1)} h`
 const MODE_LABEL = { walk: '8h EVA · Walk OK', rover: '8h EVA · Rover Needed', expedition: 'Over 8h · Multi-Sol', none: 'Blocked (>20°)' }
 const MODE_COLOR = { walk: '#5fd38d', rover: '#f2c14e', expedition: '#e2572b', none: '#e5484d' }
+const ROUTE_COLOR = { direct: '#e8e0d6', safe: '#5fd38d', science: '#f2c14e' }
 const HOME = Cesium.Cartesian3.fromDegrees(-60, 0, 1.4e7)
 const glide = (camera, destination) => camera.flyTo({ destination, duration: 2.8, easingFunction: Cesium.EasingFunction.QUINTIC_IN_OUT })
 
@@ -40,7 +41,9 @@ export default function App() {
   const [mars, setMars] = useState(null)
   const [now, setNow] = useState(new Date())
   const [route, setRoute] = useState([]) // [{lat, lon}] — A, then B
-  const [routeData, setRouteData] = useState(null) // {direct, safe, plan} from /api/route
+  const [routeData, setRouteData] = useState(null) // {direct, safe, science, plan} from /api/route
+  const [profKey, setProfKey] = useState('safe')
+  const [hoverIdx, setHoverIdx] = useState(null)
 
   // Globe
   useEffect(() => {
@@ -83,6 +86,7 @@ export default function App() {
       },
     }), { letter })
     const pins = [makePin('A · START'), makePin('B · DESTINATION')]
+    viewer.hoverPin = makePin('')
     let picked = []
     new Cesium.ScreenSpaceEventHandler(scene.canvas).setInputAction(e => {
       const c = camera.pickEllipsoid(e.position, MARS)
@@ -112,7 +116,9 @@ export default function App() {
   useEffect(() => {
     const ents = viewerRef.current.routeLayer.entities
     ents.removeAll()
+    viewerRef.current.hoverPin.show = false
     setRouteData(null)
+    setHoverIdx(null)
     if (route.length < 2) return
     const [a, b] = route
     const positions = r => Cesium.Cartesian3.fromDegreesArray(r.path.flatMap(([la, lo]) => [lo, la]))
@@ -226,6 +232,31 @@ export default function App() {
     glide(viewerRef.current.camera, HOME)
   }
   const results = query.trim() ? places.filter(p => p.name.toLowerCase().includes(query.trim().toLowerCase())) : []
+  const activeRoute = routeData && (routeData[profKey] ?? routeData.direct)
+  const allHeights = routeData ? ['direct', 'safe', 'science'].flatMap(k => routeData[k]?.profile_m ?? []) : []
+  const hMin = allHeights.length ? Math.min(...allHeights) : 0
+  const hMax = allHeights.length ? Math.max(...allHeights) : 1
+  const hSpan = Math.max(hMax - hMin, 1)
+  const svgPts = (prof, W = 360, H = 56) => prof.map((h, i) => `${(i / Math.max(prof.length - 1, 1) * W).toFixed(1)},${(H - 4 - ((h - hMin) / hSpan) * (H - 8)).toFixed(1)}`).join(' ')
+
+  const onProfileHover = e => {
+    if (!activeRoute) return
+    const rect = e.currentTarget.getBoundingClientRect()
+    const frac = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1)
+    const idx = Math.round(frac * (activeRoute.profile_m.length - 1))
+    setHoverIdx(idx)
+    const [lat, lon] = activeRoute.path[idx]
+    const km = (activeRoute.distance_m * (idx / Math.max(activeRoute.profile_m.length - 1, 1)) / 1000).toFixed(1)
+    const hp = viewerRef.current.hoverPin
+    hp.position = Cesium.Cartesian3.fromDegrees(lon, lat)
+    hp.point.color = Cesium.Color.fromCssColorString(ROUTE_COLOR[profKey])
+    hp.label.text = `${km} km · ${activeRoute.profile_m[idx].toLocaleString()} m`
+    hp.show = true
+  }
+  const onProfileLeave = () => {
+    setHoverIdx(null)
+    if (viewerRef.current?.hoverPin) viewerRef.current.hoverPin.show = false
+  }
 
   return (
     <>
@@ -298,6 +329,40 @@ export default function App() {
               ))}
             </tbody>
           </table>
+          {activeRoute && (
+            <div className="profile">
+              <div className="profhead">
+                <label>Elevation Profile ({hMin.toLocaleString()} m → {hMax.toLocaleString()} m)</label>
+                <div className="proftabs">
+                  {[['safe', 'Safest'], ['science', 'Science'], ['direct', 'Direct']].map(([k, lbl]) => routeData[k] && (
+                    <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => { setProfKey(k); onProfileLeave() }}>{lbl}</button>
+                  ))}
+                </div>
+              </div>
+              <svg viewBox="0 0 360 56" className="profsvg" onMouseMove={onProfileHover} onMouseLeave={onProfileLeave}>
+                {['direct', 'safe', 'science'].map(k => routeData[k] && k !== profKey && (
+                  <polyline key={k} fill="none" stroke={ROUTE_COLOR[k]} strokeOpacity="0.25" strokeWidth="1.2" points={svgPts(routeData[k].profile_m)} />
+                ))}
+                <polygon fill={ROUTE_COLOR[profKey]} fillOpacity="0.14" points={`0,56 ${svgPts(activeRoute.profile_m)} 360,56`} />
+                <polyline fill="none" stroke={ROUTE_COLOR[profKey]} strokeWidth="2" points={svgPts(activeRoute.profile_m)} />
+                {hoverIdx !== null && activeRoute.profile_m[hoverIdx] !== undefined && (() => {
+                  const x = (hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) * 360
+                  const y = 52 - ((activeRoute.profile_m[hoverIdx] - hMin) / hSpan) * 48
+                  return (
+                    <g>
+                      <line x1={x} y1="0" x2={x} y2="56" stroke="#e8e0d6" strokeOpacity="0.5" strokeDasharray="2 2" />
+                      <circle cx={x} cy={y} r="3.5" fill={ROUTE_COLOR[profKey]} stroke="#0d0a09" strokeWidth="1.5" />
+                    </g>
+                  )
+                })()}
+              </svg>
+              <div className="profmeta">
+                <span>A · {activeRoute.profile_m[0]?.toLocaleString()} m</span>
+                <span>{hoverIdx !== null ? `${((activeRoute.distance_m * hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) / 1000).toFixed(1)} km · ${activeRoute.profile_m[hoverIdx].toLocaleString()} m` : 'Hover chart to trace on globe'}</span>
+                <span>B · {activeRoute.profile_m.at(-1)?.toLocaleString()} m</span>
+              </div>
+            </div>
+          )}
           {routeData.science?.stations?.length > 0 && (
             <div className="stations">
               <label>Apollo Science Stations (click to inspect)</label>
