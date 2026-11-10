@@ -36,18 +36,18 @@ assert r["walk_round_trip_h"] > r["walk_h"] > 0 and r["rover_h"] < r["walk_h"]
 
 # EVA plan picks the right mode and always explains itself
 short = safest_path(-4.59, 137.44, -4.60, 137.45)          # ~0.8 km stroll (within 1 pixel)
-assert short["distance_m"] > 500 and eva_plan(straight_line(-4.59, 137.44, -4.60, 137.45), short)["mode"] == "walk"
+assert short is not None and short["distance_m"] > 500 and eva_plan(straight_line(-4.59, 137.44, -4.60, 137.45), short)["mode"] == "walk"
 mid = safest_path(-4.59, 137.44, -4.75, 137.44)            # ~9.5 km: too far on foot, fine by rover
-assert eva_plan(straight_line(-4.59, 137.44, -4.75, 137.44), mid)["mode"] == "rover"
+assert mid is not None and eva_plan(straight_line(-4.59, 137.44, -4.75, 137.44), mid)["mode"] == "rover"
 far = safest_path(-4.59, 137.44, -5.08, 137.85)            # Mount Sharp, 44 km
-assert eva_plan(straight_line(-4.59, 137.44, -5.08, 137.85), far)["mode"] == "expedition"
+assert far is not None and eva_plan(straight_line(-4.59, 137.44, -5.08, 137.85), far)["mode"] == "expedition"
 assert eva_plan(straight_line(0, 0, 1, 1), None)["mode"] == "none"
 assert "41.1°" in eva_plan(straight_line(-2.0, -71.85, -5.0, -71.85), safest_path(-2.0, -71.85, -5.0, -71.85))["why"]
 
 # Step 9: High Science path stays safe (<=20°), yields >= safest path science score at Jezero, and places stations S1..S3
 jez_safe = safest_path(18.38, 77.58, 18.65, 77.30)
 jez_sci = science_path(18.38, 77.58, 18.65, 77.30)
-assert jez_sci is not None and jez_sci["risk"] != "too steep"
+assert jez_safe is not None and jez_sci is not None and jez_sci["risk"] != "too steep"
 assert jez_sci["science_score"] > jez_safe["science_score"], (jez_sci["science_score"], jez_safe["science_score"])
 assert [st["id"] for st in jez_sci["stations"]] == ["S1", "S2", "S3"]
 

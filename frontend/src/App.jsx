@@ -7,19 +7,20 @@ Cesium.Ellipsoid.default = MARS
 
 const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ/'
 const LAYERS = {
-  Imagery: 'Mars_Viking_MDIM21_ClrMosaic_global_232m',
-  Elevation: 'Mars_MGS_MOLA_ClrShade_merge_global_463m',
+  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7 },
+  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5 },
 }
 const KIND_COLOR = { rover: '#7fd1c7', lander: '#7fd1c7', ice: '#f2f0ea', volcano: '#e2572b', crater: '#d9b26f', canyon: '#d9b26f', basin: '#d9b26f', plain: '#d9b26f' }
 const EARTH_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d' }
+const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
 
-function trekLayer(id) {
+function trekLayer({ id, maxLevel }) {
   return new Cesium.WebMapTileServiceImageryProvider({
     url: `${TREK}${id}/1.0.0/default/default028mm/{TileMatrix}/{TileRow}/{TileCol}.jpg`,
     layer: id, style: 'default', tileMatrixSetID: 'default028mm',
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
-    maximumLevel: 7, credit: 'NASA / JPL-Caltech · Mars Trek',
+    maximumLevel: maxLevel, credit: 'NASA / JPL-Caltech · Mars Trek',
   })
 }
 
@@ -40,6 +41,23 @@ function bearingDeg(lat1, lon1, lat2, lon2) {
   const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)
   return ((Math.atan2(y, x) / r) + 360) % 360
 }
+function setHoverMarker(ref, show, lon, lat, hex, text) {
+  const hp = ref.current?.hoverPin
+  if (!hp) return
+  if (show) {
+    hp.position = surfPos(lon, lat)
+    hp.point.color = Cesium.Color.fromCssColorString(hex)
+    hp.label.text = text
+  }
+  hp.show = show
+}
+function hideAllPins(ref) {
+  for (const p of ref.current?.pins ?? []) p.show = false
+  setHoverMarker(ref, false)
+}
+function setMinZoom(ref, dist) {
+  if (ref.current) ref.current.scene.screenSpaceCameraController.minimumZoomDistance = dist
+}
 
 export default function App() {
   const globeRef = useRef(null)
@@ -49,7 +67,7 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [center, setCenter] = useState({ lat: 0, lon: -60 })
   const [mars, setMars] = useState(null)
-  const [now, setNow] = useState(new Date())
+  const [now, setNow] = useState(() => new Date())
   const [route, setRoute] = useState([]) // [{lat, lon}] — A, then B
   const [routeData, setRouteData] = useState(null) // {direct, safe, science, plan} from /api/route
   const [profKey, setProfKey] = useState('safe')
@@ -62,6 +80,7 @@ export default function App() {
   const [visor, setVisor] = useState(false)
   const [visorIdx, setVisorIdx] = useState(0)
   const [visorHeading, setVisorHeading] = useState(65)
+  const [visorAnchor, setVisorAnchor] = useState({ lat: 0, lon: -60 })
 
   // Globe
   useEffect(() => {
@@ -120,8 +139,11 @@ export default function App() {
       if (!c) return
       const g = MARS.cartesianToCartographic(c)
       const lat = Cesium.Math.toDegrees(g.latitude), lon = Cesium.Math.toDegrees(g.longitude)
+      setRouteData(null)
+      setHoverIdx(null)
       setRoute(prev => {
         const next = prev.length === 2 ? [{ lat, lon }] : [...prev, { lat, lon }]
+        setLoadingRoute(next.length === 2)
         if (prev.length === 2) pins[1].show = false
         const pin = pins[next.length - 1]
         const where = `${pin.letter}\n${fmtDeg(lat, 'N', 'S')}  ${fmtDeg(lon, 'E', 'W')}`
@@ -129,7 +151,7 @@ export default function App() {
         pin.label.text = where
         pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
         pin.show = true
-        fetch(`/api/terrain?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`).then(r => r.json())
+        getJson(`/api/terrain?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`)
           .then(t => {
             const w = t.water ? `\nWater: ${t.water.status} (${t.water.detail})` : ''
             pin.label.text = `${where}\nHeight ${t.elevation_m.toLocaleString()} m\nSlope ${t.slope_deg}° · ${t.risk.toUpperCase()}${w}`
@@ -146,9 +168,7 @@ export default function App() {
   useEffect(() => {
     const ents = viewerRef.current.routeLayer.entities
     ents.removeAll()
-    viewerRef.current.hoverPin.show = false
-    setRouteData(null)
-    setHoverIdx(null)
+    setHoverMarker(viewerRef, false)
     if (route.length < 1) return
     const [a, b] = route
     const degPerM = 1 / 59158 // 1° latitude on Mars ≈ 59.16 km
@@ -176,10 +196,9 @@ export default function App() {
         },
       })
     }
-    if (route.length < 2) { setLoadingRoute(false); return }
+    if (route.length < 2) return
     let stale = false
-    setLoadingRoute(true)
-    fetch(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(r => r.json()).then(data => {
+    getJson(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(data => {
       if (stale) return
       setLoadingRoute(false)
       setRouteData(data)
@@ -229,7 +248,7 @@ export default function App() {
           })
         }
       }
-    }).catch(() => {})
+    }).catch(() => { if (!stale) setLoadingRoute(false) })
     return () => { stale = true }
   }, [route])
 
@@ -242,9 +261,9 @@ export default function App() {
 
   // Places → markers
   useEffect(() => {
-    fetch('/api/places').then(r => r.json()).then(setPlaces).catch(() => {})
-    fetch('/api/rovers').then(r => r.json()).then(setRovers).catch(() => {})
-    fetch('/api/water').then(r => r.json()).then(setWaterSites).catch(() => {})
+    getJson('/api/places').then(setPlaces).catch(() => {})
+    getJson('/api/rovers').then(setRovers).catch(() => {})
+    getJson('/api/water').then(setWaterSites).catch(() => {})
   }, [])
   useEffect(() => {
     const layer = viewerRef.current.waterLayer
@@ -332,8 +351,8 @@ export default function App() {
   useEffect(() => {
     const tick = () => {
       setNow(new Date())
-      fetch(`/api/time?lat=${center.lat.toFixed(4)}&lon=${center.lon.toFixed(4)}`)
-        .then(r => r.json()).then(setMars).catch(() => setMars(null))
+      getJson(`/api/time?lat=${center.lat.toFixed(4)}&lon=${center.lon.toFixed(4)}`)
+        .then(setMars).catch(() => setMars(null))
     }
     tick()
     const id = setInterval(tick, 1000)
@@ -352,8 +371,7 @@ export default function App() {
     setHoverIdx(null)
     setLoadingRoute(false)
     setVisorIdx(0)
-    if (viewerRef.current?.pins) for (const p of viewerRef.current.pins) p.show = false
-    if (viewerRef.current?.hoverPin) viewerRef.current.hoverPin.show = false
+    hideAllPins(viewerRef)
   }
   const flyTo = p => {
     setQuery('')
@@ -369,47 +387,48 @@ export default function App() {
   const allSearchable = [...places, ...waterSites.filter(w => !places.some(p => p.name === w.name))]
   const results = query.trim() ? allSearchable.filter(p => (p.name + ' ' + p.kind).toLowerCase().includes(query.trim().toLowerCase())) : []
   const activeRoute = routeData && (routeData[profKey] ?? routeData.direct)
-  const visorPath = activeRoute?.path ?? (route.length ? [[route[0].lat, route[0].lon]] : [[center.lat, center.lon]])
-  const vIdx = Math.min(visorIdx, Math.max(visorPath.length - 1, 0))
-  const [vLat, vLon] = visorPath[vIdx] ?? [center.lat, center.lon]
-  const vFrac = activeRoute ? vIdx / Math.max(visorPath.length - 1, 1) : 0
+  const pathLen = activeRoute ? activeRoute.path.length : 1
+  const vIdx = Math.min(visorIdx, Math.max(pathLen - 1, 0))
+  const [vLat, vLon] = activeRoute ? activeRoute.path[vIdx] : (route.length ? [route[0].lat, route[0].lon] : [visorAnchor.lat, visorAnchor.lon])
+  const vFrac = activeRoute ? vIdx / Math.max(pathLen - 1, 1) : 0
   const vElev = activeRoute ? activeRoute.profile_m[vIdx] : null
   const vElapsedH = activeRoute ? (activeRoute.walk_round_trip_h * 0.5) * vFrac : 0
   const vO2RemH = Math.max(8.0 - vElapsedH, 0)
   const vWalkBackH = activeRoute ? activeRoute.walk_back_h * vFrac : 0
   const vRemKm = activeRoute ? ((activeRoute.distance_m * (1 - vFrac)) / 1000).toFixed(2) : '0.00'
   const cardinal = CARDINAL[Math.round(visorHeading / 45) % 8]
+  const enterVisor = () => {
+    setVisorAnchor(center)
+    setVisorIdx(0)
+    setVisor(true)
+  }
 
   useEffect(() => {
     const v = viewerRef.current
     if (!v) return
     if (!visor) {
-      v.scene.screenSpaceCameraController.minimumZoomDistance = 2000
+      setMinZoom(viewerRef, 2000)
       return
     }
-    v.scene.screenSpaceCameraController.minimumZoomDistance = 150
-    const nextPt = visorPath[Math.min(vIdx + 1, visorPath.length - 1)]
-    const prevPt = visorPath[Math.max(vIdx - 1, 0)]
-    const hdg = vIdx < visorPath.length - 1 ? bearingDeg(vLat, vLon, nextPt[0], nextPt[1])
-      : (visorPath.length > 1 ? bearingDeg(prevPt[0], prevPt[1], vLat, vLon) : 65)
-    setVisorHeading(Math.round(hdg))
+    setMinZoom(viewerRef, 150)
+    const path = activeRoute?.path
+    const nextPt = path ? path[Math.min(vIdx + 1, path.length - 1)] : null
+    const prevPt = path ? path[Math.max(vIdx - 1, 0)] : null
+    const hdg = path && vIdx < path.length - 1 ? bearingDeg(vLat, vLon, nextPt[0], nextPt[1])
+      : (path && path.length > 1 ? bearingDeg(prevPt[0], prevPt[1], vLat, vLon) : 65)
     v.camera.flyTo({
       destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 1800),
       orientation: { heading: Cesium.Math.toRadians(hdg), pitch: Cesium.Math.toRadians(-14), roll: 0 },
       duration: 1.1,
     })
-    if (activeRoute && vIdx + 1 < visorPath.length) {
-      const tIdx = Math.min(vIdx + 3, visorPath.length - 1)
-      const [tLat, tLon] = visorPath[tIdx]
-      const hp = v.hoverPin
-      hp.position = surfPos(tLon, tLat)
-      hp.point.color = Cesium.Color.fromCssColorString(ROUTE_COLOR[profKey])
-      hp.label.text = `WP ${tIdx + 1}/${visorPath.length} · ${activeRoute.profile_m[tIdx]?.toLocaleString()} m`
-      hp.show = true
-    } else if (v.hoverPin) {
-      v.hoverPin.show = false
+    if (activeRoute && path && vIdx + 1 < path.length) {
+      const tIdx = Math.min(vIdx + 3, path.length - 1)
+      const [tLat, tLon] = path[tIdx]
+      setHoverMarker(viewerRef, true, tLon, tLat, ROUTE_COLOR[profKey], `WP ${tIdx + 1}/${path.length} · ${activeRoute.profile_m[tIdx]?.toLocaleString()} m`)
+    } else {
+      setHoverMarker(viewerRef, false)
     }
-  }, [visor, vIdx, profKey, routeData])
+  }, [visor, vIdx, vLat, vLon, activeRoute, profKey])
 
   useEffect(() => {
     if (!visor) return
@@ -418,18 +437,18 @@ export default function App() {
         setVisor(false)
         viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
       } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-        setVisorIdx(i => Math.min(i + 1, Math.max(visorPath.length - 1, 0)))
+        setVisorIdx(i => Math.min(i + 1, Math.max(pathLen - 1, 0)))
       } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
         setVisorIdx(i => Math.max(i - 1, 0))
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visor, vLat, vLon, visorPath.length])
+  }, [visor, vLat, vLon, pathLen])
 
   const exitVisor = () => {
     setVisor(false)
-    if (viewerRef.current?.hoverPin) viewerRef.current.hoverPin.show = false
+    setHoverMarker(viewerRef, false)
     viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
   }
   const allHeights = routeData ? ['direct', 'safe', 'science'].flatMap(k => routeData[k]?.profile_m ?? []) : []
@@ -446,15 +465,11 @@ export default function App() {
     setHoverIdx(idx)
     const [lat, lon] = activeRoute.path[idx]
     const km = (activeRoute.distance_m * (idx / Math.max(activeRoute.profile_m.length - 1, 1)) / 1000).toFixed(1)
-    const hp = viewerRef.current.hoverPin
-    hp.position = surfPos(lon, lat)
-    hp.point.color = Cesium.Color.fromCssColorString(ROUTE_COLOR[profKey])
-    hp.label.text = `${km} km · ${activeRoute.profile_m[idx].toLocaleString()} m`
-    hp.show = true
+    setHoverMarker(viewerRef, true, lon, lat, ROUTE_COLOR[profKey], `${km} km · ${activeRoute.profile_m[idx].toLocaleString()} m`)
   }
   const onProfileLeave = () => {
     setHoverIdx(null)
-    if (viewerRef.current?.hoverPin) viewerRef.current.hoverPin.show = false
+    setHoverMarker(viewerRef, false)
   }
 
   return (
@@ -612,7 +627,7 @@ export default function App() {
             </p>
           )}
           <p className="why"><b>Why this route:</b> {routeData.plan.why}</p>
-          <button className="visorlaunch" onClick={() => { setVisorIdx(0); setVisor(true) }}>
+          <button className="visorlaunch" onClick={enterVisor}>
             Enter Helmet Visor HUD ({profKey.toUpperCase()} Route) →
           </button>
         </section>
@@ -654,10 +669,10 @@ export default function App() {
           <div className="visor-controls">
             <button onClick={() => setVisorIdx(i => Math.max(i - 1, 0))} disabled={vIdx <= 0}>◀ Prev</button>
             <div className="visor-scrub">
-              <span>WAYPOINT {vIdx + 1} / {visorPath.length} ({profKey.toUpperCase()})</span>
-              <input type="range" min="0" max={Math.max(visorPath.length - 1, 0)} value={vIdx} onChange={e => setVisorIdx(Number(e.target.value))} />
+              <span>WAYPOINT {vIdx + 1} / {pathLen} ({profKey.toUpperCase()})</span>
+              <input type="range" min="0" max={Math.max(pathLen - 1, 0)} value={vIdx} onChange={e => setVisorIdx(Number(e.target.value))} />
             </div>
-            <button onClick={() => setVisorIdx(i => Math.min(i + 1, Math.max(visorPath.length - 1, 0)))} disabled={vIdx >= visorPath.length - 1}>Next ▶</button>
+            <button onClick={() => setVisorIdx(i => Math.min(i + 1, Math.max(pathLen - 1, 0)))} disabled={vIdx >= pathLen - 1}>Next ▶</button>
             <button className="visor-exit" onClick={exitVisor}>Exit Visor [ESC]</button>
           </div>
         </div>
@@ -670,7 +685,7 @@ export default function App() {
         <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
           Water & ISRU
         </button>
-        <button className="visorbtn" aria-pressed={visor} onClick={() => visor ? exitVisor() : setVisor(true)}>
+        <button className="visorbtn" aria-pressed={visor} onClick={() => visor ? exitVisor() : enterVisor()}>
           Visor HUD
         </button>
       </nav>
