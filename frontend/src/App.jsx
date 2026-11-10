@@ -33,6 +33,13 @@ const surfPos = (lon, lat) => Cesium.Cartesian3.fromDegrees(lon, lat, 400)
 const surfLine = pairs => Cesium.Cartesian3.fromDegreesArrayHeights(pairs.flatMap(([la, lo]) => [lo, la, 400]))
 const HOME = Cesium.Cartesian3.fromDegrees(-60, 0, 1.4e7)
 const glide = (camera, destination) => camera.flyTo({ destination, duration: 2.8, easingFunction: Cesium.EasingFunction.QUINTIC_IN_OUT })
+const CARDINAL = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+function bearingDeg(lat1, lon1, lat2, lon2) {
+  const r = Math.PI / 180, p1 = lat1 * r, p2 = lat2 * r, dl = (lon2 - lon1) * r
+  const y = Math.sin(dl) * Math.cos(p2)
+  const x = Math.cos(p1) * Math.sin(p2) - Math.sin(p1) * Math.cos(p2) * Math.cos(dl)
+  return ((Math.atan2(y, x) / r) + 360) % 360
+}
 
 export default function App() {
   const globeRef = useRef(null)
@@ -52,6 +59,9 @@ export default function App() {
   const [waterSites, setWaterSites] = useState([])
   const [showWater, setShowWater] = useState(true)
   const [loadingRoute, setLoadingRoute] = useState(false)
+  const [visor, setVisor] = useState(false)
+  const [visorIdx, setVisorIdx] = useState(0)
+  const [visorHeading, setVisorHeading] = useState(65)
 
   // Globe
   useEffect(() => {
@@ -82,9 +92,9 @@ export default function App() {
 
     const onMove = () => {
       const c = camera.pickEllipsoid(new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2), MARS)
-      if (!c) return
-      const g = MARS.cartesianToCartographic(c)
-      setCenter({ lat: Cesium.Math.toDegrees(g.latitude), lon: Cesium.Math.toDegrees(g.longitude) })
+      const g = c ? MARS.cartesianToCartographic(c) : MARS.cartesianToCartographic(camera.position)
+      if (g) setCenter({ lat: Cesium.Math.toDegrees(g.latitude), lon: Cesium.Math.toDegrees(g.longitude) })
+      setVisorHeading(Math.round((Cesium.Math.toDegrees(camera.heading) + 360) % 360))
     }
     camera.moveEnd.addEventListener(onMove)
 
@@ -341,21 +351,87 @@ export default function App() {
     setRouteData(null)
     setHoverIdx(null)
     setLoadingRoute(false)
+    setVisorIdx(0)
     if (viewerRef.current?.pins) for (const p of viewerRef.current.pins) p.show = false
     if (viewerRef.current?.hoverPin) viewerRef.current.hoverPin.show = false
   }
   const flyTo = p => {
     setQuery('')
+    setVisor(false)
     glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 350000))
   }
   const goHome = () => {
     setQuery('')
+    setVisor(false)
     clearRoute()
     glide(viewerRef.current.camera, HOME)
   }
   const allSearchable = [...places, ...waterSites.filter(w => !places.some(p => p.name === w.name))]
   const results = query.trim() ? allSearchable.filter(p => (p.name + ' ' + p.kind).toLowerCase().includes(query.trim().toLowerCase())) : []
   const activeRoute = routeData && (routeData[profKey] ?? routeData.direct)
+  const visorPath = activeRoute?.path ?? (route.length ? [[route[0].lat, route[0].lon]] : [[center.lat, center.lon]])
+  const vIdx = Math.min(visorIdx, Math.max(visorPath.length - 1, 0))
+  const [vLat, vLon] = visorPath[vIdx] ?? [center.lat, center.lon]
+  const vFrac = activeRoute ? vIdx / Math.max(visorPath.length - 1, 1) : 0
+  const vElev = activeRoute ? activeRoute.profile_m[vIdx] : null
+  const vElapsedH = activeRoute ? (activeRoute.walk_round_trip_h * 0.5) * vFrac : 0
+  const vO2RemH = Math.max(8.0 - vElapsedH, 0)
+  const vWalkBackH = activeRoute ? activeRoute.walk_back_h * vFrac : 0
+  const vRemKm = activeRoute ? ((activeRoute.distance_m * (1 - vFrac)) / 1000).toFixed(2) : '0.00'
+  const cardinal = CARDINAL[Math.round(visorHeading / 45) % 8]
+
+  useEffect(() => {
+    const v = viewerRef.current
+    if (!v) return
+    if (!visor) {
+      v.scene.screenSpaceCameraController.minimumZoomDistance = 2000
+      return
+    }
+    v.scene.screenSpaceCameraController.minimumZoomDistance = 150
+    const nextPt = visorPath[Math.min(vIdx + 1, visorPath.length - 1)]
+    const prevPt = visorPath[Math.max(vIdx - 1, 0)]
+    const hdg = vIdx < visorPath.length - 1 ? bearingDeg(vLat, vLon, nextPt[0], nextPt[1])
+      : (visorPath.length > 1 ? bearingDeg(prevPt[0], prevPt[1], vLat, vLon) : 65)
+    setVisorHeading(Math.round(hdg))
+    v.camera.flyTo({
+      destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 1800),
+      orientation: { heading: Cesium.Math.toRadians(hdg), pitch: Cesium.Math.toRadians(-14), roll: 0 },
+      duration: 1.1,
+    })
+    if (activeRoute && vIdx + 1 < visorPath.length) {
+      const tIdx = Math.min(vIdx + 3, visorPath.length - 1)
+      const [tLat, tLon] = visorPath[tIdx]
+      const hp = v.hoverPin
+      hp.position = surfPos(tLon, tLat)
+      hp.point.color = Cesium.Color.fromCssColorString(ROUTE_COLOR[profKey])
+      hp.label.text = `WP ${tIdx + 1}/${visorPath.length} · ${activeRoute.profile_m[tIdx]?.toLocaleString()} m`
+      hp.show = true
+    } else if (v.hoverPin) {
+      v.hoverPin.show = false
+    }
+  }, [visor, vIdx, profKey, routeData])
+
+  useEffect(() => {
+    if (!visor) return
+    const onKey = e => {
+      if (e.key === 'Escape') {
+        setVisor(false)
+        viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
+      } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+        setVisorIdx(i => Math.min(i + 1, Math.max(visorPath.length - 1, 0)))
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+        setVisorIdx(i => Math.max(i - 1, 0))
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [visor, vLat, vLon, visorPath.length])
+
+  const exitVisor = () => {
+    setVisor(false)
+    if (viewerRef.current?.hoverPin) viewerRef.current.hoverPin.show = false
+    viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
+  }
   const allHeights = routeData ? ['direct', 'safe', 'science'].flatMap(k => routeData[k]?.profile_m ?? []) : []
   const hMin = allHeights.length ? Math.min(...allHeights) : 0
   const hMax = allHeights.length ? Math.max(...allHeights) : 1
@@ -396,39 +472,41 @@ export default function App() {
         </dl>
       </header>
 
-      <section className="ui panel search">
-        <label htmlFor="q">Search Mars</label>
-        <input id="q" value={query} onChange={e => setQuery(e.target.value)} placeholder="Jezero, Olympus Mons, Curiosity…" autoComplete="off" />
-        {results.length > 0 && (
-          <ul role="listbox" aria-label="Places">
-            {results.map(p => (
-              <li key={p.name}><button onClick={() => flyTo(p)}><span>{p.name}</span><em>{p.kind}</em></button></li>
-            ))}
-          </ul>
-        )}
-        {rovers.length > 0 && (
-          <div className="rovers">
-            <div className="rovhead">
-              <label>NASA Rover Traverses</label>
-              <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
-                {showRovers ? 'Tracks On' : 'Tracks Off'}
-              </button>
-            </div>
-            {rovers.map(rv => (
-              <div key={rv.name} className="rovcard">
-                <button className="rovmain" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 32000))}>
-                  <span style={{ color: rv.color }}>● {rv.name}</span>
-                  <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
+      {!visor && (
+        <section className="ui panel search">
+          <label htmlFor="q">Search Mars</label>
+          <input id="q" value={query} onChange={e => setQuery(e.target.value)} placeholder="Jezero, Olympus Mons, Curiosity…" autoComplete="off" />
+          {results.length > 0 && (
+            <ul role="listbox" aria-label="Places">
+              {results.map(p => (
+                <li key={p.name}><button onClick={() => flyTo(p)}><span>{p.name}</span><em>{p.kind}</em></button></li>
+              ))}
+            </ul>
+          )}
+          {rovers.length > 0 && (
+            <div className="rovers">
+              <div className="rovhead">
+                <label>NASA Rover Traverses</label>
+                <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
+                  {showRovers ? 'Tracks On' : 'Tracks Off'}
                 </button>
-                <div className="rovjumps">
-                  <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.start[1], rv.start[0], 18000))}>{rv.landing}</button>
-                  <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 18000))}>Current Pos →</button>
-                </div>
               </div>
-            ))}
-          </div>
-        )}
-      </section>
+              {rovers.map(rv => (
+                <div key={rv.name} className="rovcard">
+                  <button className="rovmain" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 32000))}>
+                    <span style={{ color: rv.color }}>● {rv.name}</span>
+                    <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
+                  </button>
+                  <div className="rovjumps">
+                    <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.start[1], rv.start[0], 18000))}>{rv.landing}</button>
+                    <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 18000))}>Current Pos →</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
 
       <section className="ui panel local" aria-live="polite">
         <div className="coord">{fmtDeg(center.lat, 'N', 'S')} &nbsp; {fmtDeg(center.lon, 'E', 'W')}</div>
@@ -441,12 +519,14 @@ export default function App() {
         </div>
       </section>
 
-      <p className="ui hint" aria-live="polite">
-        {loadingRoute
-          ? 'Computing safest & science routes across MOLA terrain…'
-          : ['Click Mars to set start point A', 'Click to set destination B', 'Route A → B active · click Mars for new A'][route.length]}
-        {route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
-      </p>
+      {!visor && (
+        <p className="ui hint" aria-live="polite">
+          {loadingRoute
+            ? 'Computing safest & science routes across MOLA terrain…'
+            : ['Click Mars to set start point A', 'Click to set destination B', 'Route A → B active · click Mars for new A'][route.length]}
+          {route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
+        </p>
+      )}
 
       {routeData && (
         <section className="ui panel routeinfo" aria-live="polite">
@@ -532,7 +612,55 @@ export default function App() {
             </p>
           )}
           <p className="why"><b>Why this route:</b> {routeData.plan.why}</p>
+          <button className="visorlaunch" onClick={() => { setVisorIdx(0); setVisor(true) }}>
+            Enter Helmet Visor HUD ({profKey.toUpperCase()} Route) →
+          </button>
         </section>
+      )}
+
+      {visor && (
+        <div className="visor" role="region" aria-label="Spacesuit Helmet Visor HUD">
+          <div className="visor-compass">
+            <div className="compass-tape">
+              {[-60, -45, -30, -15, 0, 15, 30, 45, 60].map(off => {
+                const deg = (visorHeading + off + 360) % 360
+                const card = deg % 45 === 0 ? CARDINAL[(deg / 45) % 8] : null
+                return <span key={off} className={off === 0 ? 'center-tick' : ''}>{card ?? `${String(deg).padStart(3, '0')}°`}</span>
+              })}
+            </div>
+            <div className="compass-readout">HDG {String(visorHeading).padStart(3, '0')}° {cardinal} · {fmtDeg(vLat, 'N', 'S')} {fmtDeg(vLon, 'E', 'W')}</div>
+          </div>
+
+          <aside className="visor-suit">
+            <div className="suit-title">PLSS SUIT TELEMETRY · EVA-1</div>
+            <div className="suit-row"><span>O2 RESERVE</span><b style={{ color: vO2RemH > 2 ? '#5fd38d' : '#e5484d' }}>{vO2RemH.toFixed(1)} h / 8.0 h</b></div>
+            <div className="suit-bar"><div style={{ width: `${(vO2RemH / 8) * 100}%`, background: vO2RemH > 2 ? '#5fd38d' : '#e5484d' }} /></div>
+            <div className="suit-row"><span>SUIT PRESS</span><b>4.3 PSI · NOMINAL</b></div>
+            <div className="suit-row"><span>EVA ELAPSED</span><b>{fmtHours(vElapsedH)}</b></div>
+            <div className="suit-row">
+              <span>WALK-BACK A</span>
+              <b style={{ color: vWalkBackH <= 4 ? '#5fd38d' : '#e5484d' }}>{fmtHours(vWalkBackH)} · {vWalkBackH <= 4 ? 'SAFE' : '>4H LIMIT'}</b>
+            </div>
+            {vElev !== null && <div className="suit-row"><span>ELEVATION</span><b>{vElev.toLocaleString()} m</b></div>}
+            {activeRoute && <div className="suit-row"><span>DIST TO B</span><b>{vRemKm} km</b></div>}
+          </aside>
+
+          <div className="visor-reticle" aria-hidden="true">
+            <span className="ret-line" />
+            <span className="ret-box" />
+            <span className="ret-line" />
+          </div>
+
+          <div className="visor-controls">
+            <button onClick={() => setVisorIdx(i => Math.max(i - 1, 0))} disabled={vIdx <= 0}>◀ Prev</button>
+            <div className="visor-scrub">
+              <span>WAYPOINT {vIdx + 1} / {visorPath.length} ({profKey.toUpperCase()})</span>
+              <input type="range" min="0" max={Math.max(visorPath.length - 1, 0)} value={vIdx} onChange={e => setVisorIdx(Number(e.target.value))} />
+            </div>
+            <button onClick={() => setVisorIdx(i => Math.min(i + 1, Math.max(visorPath.length - 1, 0)))} disabled={vIdx >= visorPath.length - 1}>Next ▶</button>
+            <button className="visor-exit" onClick={exitVisor}>Exit Visor [ESC]</button>
+          </div>
+        </div>
       )}
 
       <nav className="ui panel layers" aria-label="Base layer and overlays">
@@ -541,6 +669,9 @@ export default function App() {
         ))}
         <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
           Water & ISRU
+        </button>
+        <button className="visorbtn" aria-pressed={visor} onClick={() => visor ? exitVisor() : setVisor(true)}>
+          Visor HUD
         </button>
       </nav>
     </>

@@ -36,4 +36,4 @@ https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide
 - [x] 11/14: real NASA rover traverse paths (Perseverance 46.1 km Sol 2022 & Curiosity 38.2 km from NASA JPL MMGIS)
 - [x] 12/14: water ice & hydrated mineral resource layer (SWIM, SHARAD, MONS, CRISM + ISRU assessment)
 - [x] 13/14: walk-back safety limit ring (6 km foot EVA ring, 12 km Apollo rover walk-back ring, 4h B→A emergency check)
-- [ ] 14/14: helmet HUD visor mode (first-person 3D view)
+- [x] 14/14: helmet HUD visor mode (first-person 3D view, compass heading tape, PLSS O2 reserve & walk-back telemetry, waypoint stepper)

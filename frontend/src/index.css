@@ -86,4 +86,33 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .layers button { all: unset; cursor: pointer; padding: 8px 14px; font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); transition: color .2s, background .3s; }
 .layers button[aria-pressed="true"] { color: var(--basalt); background: var(--dust); }
 .layers button.waterbtn[aria-pressed="true"] { color: var(--basalt); background: #56b4e9; }
+.layers button.visorbtn[aria-pressed="true"] { color: var(--basalt); background: var(--oxide); }
 .layers button:hover:not([aria-pressed="true"]), .layers button:focus-visible { color: var(--dust); }
+
+.visorlaunch { all: unset; box-sizing: border-box; display: block; width: 100%; margin-top: 12px; padding: 9px 12px; text-align: center; cursor: pointer; font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--basalt); background: var(--oxide); transition: opacity .2s; }
+.visorlaunch:hover { opacity: .88; }
+
+.visor { position: fixed; inset: 0; pointer-events: none; z-index: 20; box-shadow: inset 0 0 120px 36px rgba(13, 10, 9, 0.88); border: 1px solid rgba(226, 87, 43, 0.28); border-radius: 28px; margin: 10px; }
+.visor-compass { position: absolute; top: 64px; left: 50%; transform: translateX(-50%); text-align: center; background: rgba(13, 10, 9, 0.78); border: 1px solid rgba(226, 87, 43, 0.35); padding: 8px 18px; }
+.compass-tape { display: flex; gap: 18px; font: 500 11px var(--mono); color: var(--muted); font-variant-numeric: tabular-nums; }
+.compass-tape .center-tick { color: var(--oxide); font-weight: 700; border-bottom: 2px solid var(--oxide); padding-bottom: 2px; }
+.compass-readout { margin-top: 4px; font: 600 12px var(--mono); letter-spacing: .12em; color: var(--dust); }
+
+.visor-suit { position: absolute; top: 150px; left: 32px; width: 250px; background: rgba(13, 10, 9, 0.84); border: 1px solid rgba(226, 87, 43, 0.35); padding: 12px 14px; font: 11px var(--mono); }
+.suit-title { font-size: 10px; letter-spacing: .14em; color: var(--oxide); margin-bottom: 8px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.suit-row { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.suit-row b { color: var(--dust); font-weight: 500; }
+.suit-bar { height: 5px; background: rgba(232, 224, 214, 0.12); margin: 5px 0 8px; }
+.suit-bar div { height: 100%; transition: width .3s; }
+
+.visor-reticle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: flex; align-items: center; gap: 14px; opacity: 0.55; }
+.ret-line { width: 36px; height: 1px; background: var(--oxide); }
+.ret-box { width: 18px; height: 18px; border: 1px solid var(--oxide); }
+
+.visor-controls { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); pointer-events: auto; display: flex; align-items: center; gap: 12px; background: rgba(13, 10, 9, 0.88); border: 1px solid rgba(226, 87, 43, 0.4); padding: 10px 16px; font: 11px var(--mono); }
+.visor-controls button { all: unset; cursor: pointer; padding: 6px 10px; border: 1px solid var(--line); color: var(--dust); font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
+.visor-controls button:hover:not(:disabled) { border-color: var(--oxide); color: var(--oxide); }
+.visor-controls button:disabled { opacity: 0.35; cursor: default; }
+.visor-controls .visor-exit { border-color: var(--oxide); color: var(--oxide); }
+.visor-scrub { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 210px; font-size: 10px; letter-spacing: .1em; color: var(--muted); }
+.visor-scrub input { width: 100%; accent-color: var(--oxide); cursor: pointer; }
