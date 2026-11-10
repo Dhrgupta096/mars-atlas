@@ -48,6 +48,7 @@ export default function App() {
   const [showRovers, setShowRovers] = useState(true)
   const [waterSites, setWaterSites] = useState([])
   const [showWater, setShowWater] = useState(true)
+  const [loadingRoute, setLoadingRoute] = useState(false)
 
   // Globe
   useEffect(() => {
@@ -94,31 +95,37 @@ export default function App() {
       },
     }), { letter })
     const pins = [makePin('A · START'), makePin('B · DESTINATION')]
+    viewer.pins = pins
     viewer.hoverPin = makePin('')
-    let picked = []
-    new Cesium.ScreenSpaceEventHandler(scene.canvas).setInputAction(e => {
+    let downPos = null
+    const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas)
+    handler.setInputAction(e => { downPos = Cesium.Cartesian2.clone(e.position) }, Cesium.ScreenSpaceEventType.LEFT_DOWN)
+    handler.setInputAction(e => {
+      if (downPos && Cesium.Cartesian2.distance(downPos, e.position) > 5) return // ignore drags
       const c = camera.pickEllipsoid(e.position, MARS)
       if (!c) return
       const g = MARS.cartesianToCartographic(c)
       const lat = Cesium.Math.toDegrees(g.latitude), lon = Cesium.Math.toDegrees(g.longitude)
-      if (picked.length === 2) { picked = []; pins[1].show = false }
-      const pin = pins[picked.length]
-      picked = [...picked, { lat, lon }]
-      setRoute(picked)
-      const where = `${pin.letter}\n${fmtDeg(lat, 'N', 'S')}  ${fmtDeg(lon, 'E', 'W')}`
-      pin.position = c
-      pin.label.text = where
-      pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
-      pin.show = true
-      fetch(`/api/terrain?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`).then(r => r.json())
-        .then(t => {
-          const w = t.water ? `\nWater: ${t.water.status} (${t.water.detail})` : ''
-          pin.label.text = `${where}\nHeight ${t.elevation_m.toLocaleString()} m\nSlope ${t.slope_deg}° · ${t.risk.toUpperCase()}${w}`
-          pin.point.color = Cesium.Color.fromCssColorString(RISK_COLOR[t.risk])
-        })
-        .catch(() => {})
+      setRoute(prev => {
+        const next = prev.length === 2 ? [{ lat, lon }] : [...prev, { lat, lon }]
+        if (prev.length === 2) pins[1].show = false
+        const pin = pins[next.length - 1]
+        const where = `${pin.letter}\n${fmtDeg(lat, 'N', 'S')}  ${fmtDeg(lon, 'E', 'W')}`
+        pin.position = c
+        pin.label.text = where
+        pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
+        pin.show = true
+        fetch(`/api/terrain?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`).then(r => r.json())
+          .then(t => {
+            const w = t.water ? `\nWater: ${t.water.status} (${t.water.detail})` : ''
+            pin.label.text = `${where}\nHeight ${t.elevation_m.toLocaleString()} m\nSlope ${t.slope_deg}° · ${t.risk.toUpperCase()}${w}`
+            pin.point.color = Cesium.Color.fromCssColorString(RISK_COLOR[t.risk])
+          })
+          .catch(() => {})
+        return next
+      })
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
-    return () => viewer.destroy()
+    return () => { handler.destroy(); viewer.destroy() }
   }, [])
 
   // A set → draw 6 km Foot-EVA ring & 12 km Apollo Walk-Back Safety Limit ring; A + B set → fetch routes
@@ -140,7 +147,7 @@ export default function App() {
       }).flat()
       ents.add({
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, arcType: Cesium.ArcType.NONE,
+          positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, arcType: Cesium.ArcType.GEODESIC,
           material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.8), dashLength: 10 }),
         },
       })
@@ -155,16 +162,18 @@ export default function App() {
         },
       })
     }
-    if (route.length < 2) return
+    if (route.length < 2) { setLoadingRoute(false); return }
     const positions = r => Cesium.Cartesian3.fromDegreesArray(r.path.flatMap(([la, lo]) => [lo, la]))
     let stale = false
+    setLoadingRoute(true)
     fetch(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(r => r.json()).then(data => {
       if (stale) return
+      setLoadingRoute(false)
       setRouteData(data)
       const { direct, safe, science } = data
       ents.add({
         polyline: {
-          positions: positions(direct), width: 2, arcType: Cesium.ArcType.NONE,
+          positions: positions(direct), width: 2, arcType: Cesium.ArcType.GEODESIC,
           material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString('#e8e0d6').withAlpha(0.6), dashLength: 12 }),
         },
       })
@@ -181,7 +190,7 @@ export default function App() {
       if (safe) {
         ents.add({
           polyline: {
-            positions: positions(safe), width: 5, arcType: Cesium.ArcType.NONE,
+            positions: positions(safe), width: 5, arcType: Cesium.ArcType.GEODESIC,
             material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString(RISK_COLOR.safe), glowPower: 0.25 }),
           },
         })
@@ -190,7 +199,7 @@ export default function App() {
         const gold = Cesium.Color.fromCssColorString('#f2c14e')
         ents.add({
           polyline: {
-            positions: positions(science), width: 4, arcType: Cesium.ArcType.NONE,
+            positions: positions(science), width: 4, arcType: Cesium.ArcType.GEODESIC,
             material: new Cesium.PolylineGlowMaterialProperty({ color: gold, glowPower: 0.2 }),
           },
         })
@@ -231,19 +240,28 @@ export default function App() {
     ents.removeAll()
     for (const w of waterSites) {
       const col = Cesium.Color.fromCssColorString(w.kind === 'ice' ? '#56b4e9' : '#7fd1c7')
+      const degLat = w.radius_km / 59.158
+      const degLon = degLat / Math.max(Math.cos(w.lat * Math.PI / 180), 0.15)
+      const ring = Array.from({ length: 49 }, (_, i) => {
+        const ang = (i / 48) * Math.PI * 2
+        return [w.lon + degLon * Math.cos(ang), Math.max(-89.5, Math.min(89.5, w.lat + degLat * Math.sin(ang)))]
+      }).flat()
+      ents.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 2, arcType: Cesium.ArcType.GEODESIC,
+          material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.75), dashLength: 12 }),
+        },
+      })
       ents.add({
         position: Cesium.Cartesian3.fromDegrees(w.lon, w.lat),
-        ellipse: {
-          semiMajorAxis: w.radius_km * 1000, semiMinorAxis: w.radius_km * 1000,
-          material: col.withAlpha(0.14), outline: true, outlineColor: col.withAlpha(0.75), outlineWidth: 1.5, height: 0,
-        },
-        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, disableDepthTestDistance: Number.POSITIVE_INFINITY },
         label: {
           text: `[H2O] ${w.name.toUpperCase()} · ${w.yield.toUpperCase()}`,
           font: '500 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 7e6),
+          disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
       })
     }
@@ -258,7 +276,7 @@ export default function App() {
       ents.add({
         polyline: {
           positions: Cesium.Cartesian3.fromDegreesArray(rv.path.flatMap(([la, lo]) => [lo, la])),
-          width: 3, arcType: Cesium.ArcType.NONE,
+          width: 3, arcType: Cesium.ArcType.GEODESIC,
           material: new Cesium.PolylineGlowMaterialProperty({ color: col, glowPower: 0.2 }),
         },
       })
@@ -315,12 +333,21 @@ export default function App() {
     return () => ctx.revert()
   }, [])
 
+  const clearRoute = () => {
+    setRoute([])
+    setRouteData(null)
+    setHoverIdx(null)
+    setLoadingRoute(false)
+    if (viewerRef.current?.pins) for (const p of viewerRef.current.pins) p.show = false
+    if (viewerRef.current?.hoverPin) viewerRef.current.hoverPin.show = false
+  }
   const flyTo = p => {
     setQuery('')
     glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 350000))
   }
   const goHome = () => {
     setQuery('')
+    clearRoute()
     glide(viewerRef.current.camera, HOME)
   }
   const allSearchable = [...places, ...waterSites.filter(w => !places.some(p => p.name === w.name))]
@@ -412,7 +439,10 @@ export default function App() {
       </section>
 
       <p className="ui hint" aria-live="polite">
-        {['Click Mars to set start point A', 'Click to set destination B', 'Route A → B set · click to start over'][route.length]}
+        {loadingRoute
+          ? 'Computing safest & science routes across MOLA terrain…'
+          : ['Click Mars to set start point A', 'Click to set destination B', 'Route A → B active · click Mars for new A'][route.length]}
+        {route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
       </p>
 
       {routeData && (

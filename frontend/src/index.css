@@ -27,7 +27,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; }
 .panel label, .sub { font: 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 
-.search { top: 88px; left: 24px; width: 300px; }
+.search { top: 88px; left: 24px; width: 300px; max-height: calc(100vh - 240px); overflow-y: auto; }
 .search input { display: block; width: 100%; margin-top: 8px; padding: 10px 0; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--dust); font: 15px var(--sans); outline: none; transition: border-color .3s; }
 .search input:focus { border-color: var(--oxide); }
 .search ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 280px; overflow-y: auto; }
@@ -53,7 +53,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 
 .layers { right: 24px; bottom: 32px; display: flex; padding: 4px; gap: 4px; }
 
-.routeinfo { top: 88px; right: 24px; width: 410px; }
+.routeinfo { top: 88px; right: 24px; width: 410px; max-height: calc(100vh - 165px); overflow-y: auto; }
 .routehead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
 .badge { padding: 3px 7px; border: 1px solid; font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .routeinfo table { width: 100%; margin-top: 10px; border-collapse: collapse; font: 12px var(--mono); font-variant-numeric: tabular-nums; }
@@ -80,7 +80,9 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .why { margin: 12px 0 0; font: 12px/1.5 var(--sans); color: var(--dust); }
 .why b { font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 4px; }
 
-.hint { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); pointer-events: none; }
+.hint { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 12px; }
+.clearbtn { all: unset; cursor: pointer; color: var(--oxide); font-weight: 600; }
+.clearbtn:hover { color: var(--dust); }
 .layers button { all: unset; cursor: pointer; padding: 8px 14px; font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); transition: color .2s, background .3s; }
 .layers button[aria-pressed="true"] { color: var(--basalt); background: var(--dust); }
 .layers button.waterbtn[aria-pressed="true"] { color: var(--basalt); background: #56b4e9; }
