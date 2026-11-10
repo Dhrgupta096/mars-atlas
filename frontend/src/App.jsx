@@ -44,6 +44,8 @@ export default function App() {
   const [routeData, setRouteData] = useState(null) // {direct, safe, science, plan} from /api/route
   const [profKey, setProfKey] = useState('safe')
   const [hoverIdx, setHoverIdx] = useState(null)
+  const [rovers, setRovers] = useState([])
+  const [showRovers, setShowRovers] = useState(true)
 
   // Globe
   useEffect(() => {
@@ -63,6 +65,8 @@ export default function App() {
     viewer.dataSources.add(viewer.placesLayer)
     viewer.routeLayer = new Cesium.CustomDataSource('route')
     viewer.dataSources.add(viewer.routeLayer)
+    viewer.roversLayer = new Cesium.CustomDataSource('rovers')
+    viewer.dataSources.add(viewer.roversLayer)
 
     camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-60, 0, 6e7) })
     glide(camera, HOME)
@@ -186,7 +190,39 @@ export default function App() {
   // Places → markers
   useEffect(() => {
     fetch('/api/places').then(r => r.json()).then(setPlaces).catch(() => {})
+    fetch('/api/rovers').then(r => r.json()).then(setRovers).catch(() => {})
   }, [])
+  useEffect(() => {
+    const layer = viewerRef.current.roversLayer
+    layer.show = showRovers
+    const ents = layer.entities
+    ents.removeAll()
+    for (const rv of rovers) {
+      const col = Cesium.Color.fromCssColorString(rv.color)
+      ents.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArray(rv.path.flatMap(([la, lo]) => [lo, la])),
+          width: 3, arcType: Cesium.ArcType.NONE,
+          material: new Cesium.PolylineGlowMaterialProperty({ color: col, glowPower: 0.2 }),
+        },
+      })
+      for (const wp of rv.waypoints) {
+        ents.add({
+          position: Cesium.Cartesian3.fromDegrees(wp.lon, wp.lat),
+          point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+          label: {
+            text: `${rv.name.toUpperCase()} · ${wp.label.toUpperCase()}`,
+            font: '500 10px "JetBrains Mono", ui-monospace, monospace',
+            pixelOffset: new Cesium.Cartesian2(8, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+            fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.5e5),
+            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          },
+        })
+      }
+    }
+  }, [rovers, showRovers])
   useEffect(() => {
     const ents = viewerRef.current.placesLayer.entities
     ents.removeAll()
@@ -282,6 +318,28 @@ export default function App() {
               <li key={p.name}><button onClick={() => flyTo(p)}><span>{p.name}</span><em>{p.kind}</em></button></li>
             ))}
           </ul>
+        )}
+        {rovers.length > 0 && (
+          <div className="rovers">
+            <div className="rovhead">
+              <label>NASA Rover Traverses</label>
+              <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
+                {showRovers ? 'Tracks On' : 'Tracks Off'}
+              </button>
+            </div>
+            {rovers.map(rv => (
+              <div key={rv.name} className="rovcard">
+                <button className="rovmain" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 32000))}>
+                  <span style={{ color: rv.color }}>● {rv.name}</span>
+                  <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
+                </button>
+                <div className="rovjumps">
+                  <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.start[1], rv.start[0], 18000))}>{rv.landing}</button>
+                  <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 18000))}>Current Pos →</button>
+                </div>
+              </div>
+            ))}
+          </div>
         )}
       </section>
 

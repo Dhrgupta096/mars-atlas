@@ -3,6 +3,7 @@ from fastapi import FastAPI, Query
 from mars_time import mars_time
 from terrain import elevation, slope, risk
 from route import straight_line, safest_path, science_path, eva_plan
+from rovers import ROVERS
 
 app = FastAPI(title="Mars Map API")
 
@@ -51,3 +52,8 @@ def route(lat1: float = Query(..., ge=-90, le=90), lon1: float = Query(..., ge=-
     safe = safest_path(lat1, lon1, lat2, lon2)
     science = science_path(lat1, lon1, lat2, lon2)
     return {"direct": direct, "safe": safe, "science": science, "plan": eva_plan(direct, safe, science)}
+
+
+@app.get("/api/rovers")
+def rovers():
+    return ROVERS

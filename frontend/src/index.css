@@ -34,6 +34,16 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .search button { all: unset; box-sizing: border-box; display: flex; justify-content: space-between; width: 100%; padding: 9px 0; cursor: pointer; border-bottom: 1px solid var(--line); transition: color .2s, padding .3s; }
 .search button:hover, .search button:focus-visible { color: var(--oxide); padding-left: 6px; }
 .search em { font: normal 10px var(--mono); text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+.rovers { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.rovhead { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+.toggle { all: unset; cursor: pointer; padding: 2px 6px; font: 500 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); }
+.toggle[aria-pressed="true"] { color: var(--dust); border-color: var(--dust); }
+.rovcard { padding: 6px 0; border-bottom: 1px solid var(--line); }
+.rovmain { all: unset; display: flex; justify-content: space-between; align-items: center; width: 100%; cursor: pointer; font: 500 13px var(--sans); }
+.rovmain:hover { color: var(--oxide); }
+.rovjumps { display: flex; justify-content: space-between; margin-top: 4px; }
+.rovjumps button { all: unset; cursor: pointer; font: 10px var(--mono); color: var(--muted); letter-spacing: .06em; }
+.rovjumps button:hover { color: var(--dust); }
 
 .local { left: 24px; bottom: 32px; min-width: 300px; }
 .coord { font: 11px var(--mono); color: var(--muted); letter-spacing: .08em; }
