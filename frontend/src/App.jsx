@@ -46,6 +46,8 @@ export default function App() {
   const [hoverIdx, setHoverIdx] = useState(null)
   const [rovers, setRovers] = useState([])
   const [showRovers, setShowRovers] = useState(true)
+  const [waterSites, setWaterSites] = useState([])
+  const [showWater, setShowWater] = useState(true)
 
   // Globe
   useEffect(() => {
@@ -67,6 +69,8 @@ export default function App() {
     viewer.dataSources.add(viewer.routeLayer)
     viewer.roversLayer = new Cesium.CustomDataSource('rovers')
     viewer.dataSources.add(viewer.roversLayer)
+    viewer.waterLayer = new Cesium.CustomDataSource('water')
+    viewer.dataSources.add(viewer.waterLayer)
 
     camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-60, 0, 6e7) })
     glide(camera, HOME)
@@ -108,7 +112,8 @@ export default function App() {
       pin.show = true
       fetch(`/api/terrain?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`).then(r => r.json())
         .then(t => {
-          pin.label.text = `${where}\nHeight ${t.elevation_m.toLocaleString()} m\nSlope ${t.slope_deg}° · ${t.risk.toUpperCase()}`
+          const w = t.water ? `\nWater: ${t.water.status} (${t.water.detail})` : ''
+          pin.label.text = `${where}\nHeight ${t.elevation_m.toLocaleString()} m\nSlope ${t.slope_deg}° · ${t.risk.toUpperCase()}${w}`
           pin.point.color = Cesium.Color.fromCssColorString(RISK_COLOR[t.risk])
         })
         .catch(() => {})
@@ -191,7 +196,32 @@ export default function App() {
   useEffect(() => {
     fetch('/api/places').then(r => r.json()).then(setPlaces).catch(() => {})
     fetch('/api/rovers').then(r => r.json()).then(setRovers).catch(() => {})
+    fetch('/api/water').then(r => r.json()).then(setWaterSites).catch(() => {})
   }, [])
+  useEffect(() => {
+    const layer = viewerRef.current.waterLayer
+    layer.show = showWater
+    const ents = layer.entities
+    ents.removeAll()
+    for (const w of waterSites) {
+      const col = Cesium.Color.fromCssColorString(w.kind === 'ice' ? '#56b4e9' : '#7fd1c7')
+      ents.add({
+        position: Cesium.Cartesian3.fromDegrees(w.lon, w.lat),
+        ellipse: {
+          semiMajorAxis: w.radius_km * 1000, semiMinorAxis: w.radius_km * 1000,
+          material: col.withAlpha(0.14), outline: true, outlineColor: col.withAlpha(0.75), outlineWidth: 1.5, height: 0,
+        },
+        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+        label: {
+          text: `[H2O] ${w.name.toUpperCase()} · ${w.yield.toUpperCase()}`,
+          font: '500 10px "JetBrains Mono", ui-monospace, monospace',
+          pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 7e6),
+        },
+      })
+    }
+  }, [waterSites, showWater])
   useEffect(() => {
     const layer = viewerRef.current.roversLayer
     layer.show = showRovers
@@ -267,7 +297,8 @@ export default function App() {
     setQuery('')
     glide(viewerRef.current.camera, HOME)
   }
-  const results = query.trim() ? places.filter(p => p.name.toLowerCase().includes(query.trim().toLowerCase())) : []
+  const allSearchable = [...places, ...waterSites.filter(w => !places.some(p => p.name === w.name))]
+  const results = query.trim() ? allSearchable.filter(p => (p.name + ' ' + p.kind).toLowerCase().includes(query.trim().toLowerCase())) : []
   const activeRoute = routeData && (routeData[profKey] ?? routeData.direct)
   const allHeights = routeData ? ['direct', 'safe', 'science'].flatMap(k => routeData[k]?.profile_m ?? []) : []
   const hMin = allHeights.length ? Math.min(...allHeights) : 0
@@ -435,14 +466,22 @@ export default function App() {
               </ul>
             </div>
           )}
+          {routeData.water && (
+            <p className="why">
+              <b>ISRU Water at B ({routeData.water.source}):</b> {routeData.water.status} — {routeData.water.detail}
+            </p>
+          )}
           <p className="why"><b>Why this route:</b> {routeData.plan.why}</p>
         </section>
       )}
 
-      <nav className="ui panel layers" aria-label="Base layer">
+      <nav className="ui panel layers" aria-label="Base layer and overlays">
         {Object.keys(LAYERS).map(k => (
           <button key={k} aria-pressed={layer === k} onClick={() => setLayer(k)}>{k}</button>
         ))}
+        <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
+          Water & ISRU
+        </button>
       </nav>
     </>
   )

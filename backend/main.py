@@ -4,6 +4,7 @@ from mars_time import mars_time
 from terrain import elevation, slope, risk
 from route import straight_line, safest_path, science_path, eva_plan
 from rovers import ROVERS
+from water import water_sites, water_at
 
 app = FastAPI(title="Mars Map API")
 
@@ -42,7 +43,7 @@ def places():
 def terrain(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=360)):
     s = slope(lat, lon)
     return {"lat": lat, "lon": lon, "elevation_m": elevation(lat, lon), "slope_deg": round(s, 1),
-            "risk": risk(s), "source": "MGS MOLA MEGDR 32 px/deg"}
+            "risk": risk(s), "water": water_at(lat, lon), "source": "MGS MOLA MEGDR 32 px/deg"}
 
 
 @app.get("/api/route")
@@ -51,9 +52,15 @@ def route(lat1: float = Query(..., ge=-90, le=90), lon1: float = Query(..., ge=-
     direct = straight_line(lat1, lon1, lat2, lon2)
     safe = safest_path(lat1, lon1, lat2, lon2)
     science = science_path(lat1, lon1, lat2, lon2)
-    return {"direct": direct, "safe": safe, "science": science, "plan": eva_plan(direct, safe, science)}
+    return {"direct": direct, "safe": safe, "science": science, "plan": eva_plan(direct, safe, science),
+            "water": water_at(lat2, lon2)}
 
 
 @app.get("/api/rovers")
 def rovers():
     return ROVERS
+
+
+@app.get("/api/water")
+def water():
+    return water_sites()

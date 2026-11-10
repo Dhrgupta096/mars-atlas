@@ -83,4 +83,5 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .hint { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); pointer-events: none; }
 .layers button { all: unset; cursor: pointer; padding: 8px 14px; font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); transition: color .2s, background .3s; }
 .layers button[aria-pressed="true"] { color: var(--basalt); background: var(--dust); }
+.layers button.waterbtn[aria-pressed="true"] { color: var(--basalt); background: #56b4e9; }
 .layers button:hover:not([aria-pressed="true"]), .layers button:focus-visible { color: var(--dust); }
