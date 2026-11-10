@@ -1,5 +1,5 @@
 """Run: python test_route.py"""
-from route import distance_m, straight_line, safest_path, eva_plan, _hours
+from route import distance_m, straight_line, safest_path, science_path, eva_plan, _hours
 
 # Quarter of Mars' equator = pi/2 * 3389.5 km
 assert abs(distance_m(0, 0, 0, 90) - 5324.2e3) < 1e3
@@ -43,4 +43,11 @@ far = safest_path(-4.59, 137.44, -5.08, 137.85)            # Mount Sharp, 44 km
 assert eva_plan(straight_line(-4.59, 137.44, -5.08, 137.85), far)["mode"] == "expedition"
 assert eva_plan(straight_line(0, 0, 1, 1), None)["mode"] == "none"
 assert "41.1°" in eva_plan(straight_line(-2.0, -71.85, -5.0, -71.85), safest_path(-2.0, -71.85, -5.0, -71.85))["why"]
+
+# Step 9: High Science path stays safe (<=20°), yields >= safest path science score at Jezero, and places stations S1..S3
+jez_safe = safest_path(18.38, 77.58, 18.65, 77.30)
+jez_sci = science_path(18.38, 77.58, 18.65, 77.30)
+assert jez_sci is not None and jez_sci["risk"] != "too steep"
+assert jez_sci["science_score"] > jez_safe["science_score"], (jez_sci["science_score"], jez_safe["science_score"])
+assert [st["id"] for st in jez_sci["stations"]] == ["S1", "S2", "S3"]
 print("all route checks passed")

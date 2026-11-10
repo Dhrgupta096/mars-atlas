@@ -49,8 +49,43 @@ def _hours(seg_m, grade) -> tuple[float, float]:
     return float((km / walk_kmh).sum()), float((km / rover_kmh).sum())
 
 
+def _sci_exposure(slopes: np.ndarray) -> np.ndarray:
+    """Geological outcrop/contact exposure (0..1): 0 on flat dust (0°) and cliffs (>=20°), peaks at 10° bedrock benches."""
+    return (np.sin(np.pi * np.clip(slopes, 0, MAX_SLOPE) / MAX_SLOPE) ** 0.7) * (slopes <= MAX_SLOPE)
+
+
+def _stations(lats: np.ndarray, lons: np.ndarray, heights: np.ndarray, slopes: np.ndarray, k: int = 3) -> list[dict]:
+    """Pick up to k well-spaced Apollo-style science stations at top outcrop exposures along the path."""
+    n = len(lats)
+    if n < 3:
+        return []
+    exp = _sci_exposure(slopes)
+    picked = []
+    min_gap = max(1, n // (k + 1))
+    for idx in np.argsort(-exp):
+        i = int(idx)
+        if 0 < i < n - 1 and all(abs(i - j) >= min_gap for j in picked):
+            picked.append(i)
+            if len(picked) == k:
+                break
+    picked.sort()
+    kind = lambda s: "Layered Outcrop" if s >= 8 else "Geologic Contact" if s >= 3 else "Regolith Sample"
+    return [
+        {
+            "id": f"S{m + 1}",
+            "kind": kind(float(slopes[i])),
+            "lat": round(float(lats[i]), 4),
+            "lon": round(float(lons[i]), 4),
+            "elevation_m": int(heights[i]),
+            "slope_deg": round(float(slopes[i]), 1),
+            "science_score": round(float(exp[i] * 100)),
+        }
+        for m, i in enumerate(picked)
+    ]
+
+
 def _analyse(lats, lons, d) -> dict:
-    """Shared stats for any path: climb, descent, steepest point, risk, travel times."""
+    """Shared stats for any path: climb, descent, steepest point, risk, travel times, science score & stations."""
     heights = np.array([elevation(la, lo) for la, lo in zip(lats, lons)])
     slopes = np.array([slope(la, lo) for la, lo in zip(lats, lons)])
     dh = np.diff(heights)
@@ -59,6 +94,8 @@ def _analyse(lats, lons, d) -> dict:
     grade = np.divide(dh, seg, out=np.zeros_like(seg), where=seg > 0)
     walk_out, rover_out = _hours(seg, grade)
     walk_back, rover_back = _hours(seg, -grade)  # return trip: uphill and downhill swap
+    exp = _sci_exposure(slopes)
+    sci_score = round(float((0.4 * exp.mean() + 0.6 * np.percentile(exp, 80)) * 100))
     return {
         "distance_m": round(d),
         "climb_m": int(dh[dh > 0].sum()),
@@ -70,13 +107,15 @@ def _analyse(lats, lons, d) -> dict:
         "walk_round_trip_h": round(walk_out + walk_back, 2),
         "rover_h": round(rover_out, 2),
         "rover_round_trip_h": round(rover_out + rover_back, 2),
+        "science_score": sci_score,
+        "stations": _stations(lats, lons, heights, slopes),
         "path": [[round(float(la), 5), round(float(lo), 5)] for la, lo in zip(lats, lons)],
         "profile_m": heights.tolist(),
     }
 
 
-def eva_plan(direct: dict, safe: dict | None) -> dict:
-    """Which way to travel + the plain-English 'Why this route?' line."""
+def eva_plan(direct: dict, safe: dict | None, science: dict | None = None) -> dict:
+    """Which way to travel + the plain-English 'Why this route?' line comparing Direct, Safest, and High Science."""
     if safe is None:
         return {"mode": "none", "why": f"Every way to B crosses slopes over {MAX_SLOPE:.0f}°. Pick a different destination."}
     if safe["walk_round_trip_h"] <= EVA_HOURS:
@@ -87,24 +126,36 @@ def eva_plan(direct: dict, safe: dict | None) -> dict:
         mode, fit = "expedition", f"Too far for one {EVA_HOURS} h EVA even by rover ({safe['rover_round_trip_h']:.1f} h). Needs a multi-sol expedition."
     extra_km = (safe["distance_m"] - direct["distance_m"]) / 1000
     if direct["risk"] == "too steep":
-        why = f"Avoids a {direct['max_slope_deg']}° slope on the direct line by adding {extra_km:.1f} km."
+        why = f"Safest route avoids a {direct['max_slope_deg']}° cliff on the direct line (+{extra_km:.1f} km)."
     elif safe["max_slope_deg"] < direct["max_slope_deg"] - 2:
-        why = f"Keeps the steepest slope to {safe['max_slope_deg']}° instead of {direct['max_slope_deg']}°, for {extra_km:.1f} km extra."
+        why = f"Safest route cuts max slope from {direct['max_slope_deg']}° to {safe['max_slope_deg']}° (+{extra_km:.1f} km)."
     else:
-        why = "The direct line is already gentle, so the safest route stays close to it."
+        why = "Direct line is already gentle, so the safest route stays close to it."
+    if science and science["science_score"] > safe["science_score"]:
+        sci_km = (science["distance_m"] - direct["distance_m"]) / 1000
+        why += f" Science route boosts outcrop yield from {safe['science_score']} to {science['science_score']}/100 (+{max(sci_km, 0):.1f} km vs direct, {len(science['stations'])} stations)."
     return {"mode": mode, "why": f"{why} {fit}"}
 
 
 def safest_path(lat1, lon1, lat2, lon2) -> dict | None:
     """Search near A–B first; if walls block every way, widen the search area before giving up."""
     for spread in (0.5, 2, 5):
-        p = _astar(lat1, lon1, lat2, lon2, spread)
+        p = _astar(lat1, lon1, lat2, lon2, spread, mode="safe")
         if p:
             return p
     return None
 
 
-def _astar(lat1, lon1, lat2, lon2, spread) -> dict | None:
+def science_path(lat1, lon1, lat2, lon2) -> dict | None:
+    """High-science path: stays safe (<=20°) while detouring toward exposed bedrock outcrops & geologic contacts."""
+    for spread in (0.6, 2, 5):
+        p = _astar(lat1, lon1, lat2, lon2, spread, mode="science")
+        if p:
+            return p
+    return None
+
+
+def _astar(lat1, lon1, lat2, lon2, spread, mode="safe") -> dict | None:
     """A* over the MOLA grid around A and B. Cost = distance × (1 + (slope/10°)²); slopes > MAX_SLOPE are blocked.
     Returns None if every way is blocked.
     ponytail: 8-connected grid → slightly zig-zag paths; pure-Python A* (~1 s on 400²). Upgrade: path smoothing, scikit-image MCP.
@@ -138,7 +189,12 @@ def _astar(lat1, lon1, lat2, lon2, spread) -> dict | None:
     start, goal = cell(r1, c1), cell(r2, c2)
     if start == goal:
         return straight_line(lat1, lon1, lat2, lon2)
-    mult = (1 + (s / 10) ** 2).tolist()
+    if mode == "science":
+        # Mean slope for outcrop exposure so we target sustained geologic benches, while max slope `s` still blocks cliffs
+        s_mean = np.pad(s_f, ((0, H * step - s_f.shape[0]), (0, W * step - s_f.shape[1])), mode="edge").reshape(H, step, W, step).mean(axis=(1, 3))
+        mult = (1 + 5.0 * (1 - _sci_exposure(s_mean))).tolist()
+    else:
+        mult = (1 + (s / 10) ** 2).tolist()
     blocked = (s > MAX_SLOPE).tolist()
     blocked[start[0]][start[1]] = blocked[goal[0]][goal[1]] = False
     dxl, dxmin = dx.tolist(), float(dx.min())

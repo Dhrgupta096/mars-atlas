@@ -31,7 +31,7 @@ https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide
 - [x] 6/8: straight line + distance (+ climb, descent, steepest point)
 - [x] 7/8: safest path (A*, blocks >20°, widens search if walled in)
 - [x] 8/8: route info panel (walk/rover round-trip time, 8h EVA check, "Why this route?")
-- [ ] 9/14: 3rd route — "High Science" path (weighs geological targets + terrain)
+- [x] 9/14: 3rd route — "High Science" path (weighs geological targets + terrain, Apollo stations S1–S3)
 - [ ] 10/14: interactive elevation profile chart along the route
 - [ ] 11/14: real NASA rover traverse paths (Perseverance & Curiosity)
 - [ ] 12/14: water ice & hydrated mineral resource layer

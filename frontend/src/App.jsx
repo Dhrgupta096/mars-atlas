@@ -120,7 +120,7 @@ export default function App() {
     fetch(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(r => r.json()).then(data => {
       if (stale) return
       setRouteData(data)
-      const { direct, safe } = data
+      const { direct, safe, science } = data
       ents.add({
         polyline: {
           positions: positions(direct), width: 2, arcType: Cesium.ArcType.NONE,
@@ -144,6 +144,27 @@ export default function App() {
             material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString(RISK_COLOR.safe), glowPower: 0.25 }),
           },
         })
+      }
+      if (science) {
+        const gold = Cesium.Color.fromCssColorString('#f2c14e')
+        ents.add({
+          polyline: {
+            positions: positions(science), width: 4, arcType: Cesium.ArcType.NONE,
+            material: new Cesium.PolylineGlowMaterialProperty({ color: gold, glowPower: 0.2 }),
+          },
+        })
+        for (const st of science.stations) {
+          ents.add({
+            position: Cesium.Cartesian3.fromDegrees(st.lon, st.lat),
+            point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+            label: {
+              text: `${st.id} · ${st.kind.toUpperCase()}`, font: '500 10px "JetBrains Mono", ui-monospace, monospace',
+              pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+              fillColor: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE, disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
+          })
+        }
       }
     }).catch(() => {})
     return () => { stale = true }
@@ -257,13 +278,14 @@ export default function App() {
             </span>
           </div>
           <table>
-            <thead><tr><th></th><th>Direct</th><th className="safe">Safest</th></tr></thead>
+            <thead><tr><th></th><th>Direct</th><th className="safe">Safest</th><th className="sci">Science</th></tr></thead>
             <tbody>
               {[
                 ['Distance', r => r.distance_m >= 10000 ? `${(r.distance_m / 1000).toFixed(1)} km` : `${r.distance_m.toLocaleString()} m`],
                 ['Climb', r => `↑ ${r.climb_m.toLocaleString()} m`],
                 ['Descent', r => `↓ ${r.descent_m.toLocaleString()} m`],
                 ['Steepest', r => <span style={{ color: RISK_COLOR[r.risk] }}>{r.max_slope_deg}° · {r.risk}</span>],
+                ['Science', r => `${r.science_score}/100`],
                 ['Walk (A↔B)', r => fmtHours(r.walk_round_trip_h)],
                 ['Rover (A↔B)', r => fmtHours(r.rover_round_trip_h)],
               ].map(([name, fmt]) => (
@@ -271,10 +293,25 @@ export default function App() {
                   <th>{name}</th>
                   <td>{fmt(routeData.direct)}</td>
                   <td>{routeData.safe ? fmt(routeData.safe) : '—'}</td>
+                  <td>{routeData.science ? fmt(routeData.science) : '—'}</td>
                 </tr>
               ))}
             </tbody>
           </table>
+          {routeData.science?.stations?.length > 0 && (
+            <div className="stations">
+              <label>Apollo Science Stations (click to inspect)</label>
+              <ul>
+                {routeData.science.stations.map(st => (
+                  <li key={st.id}>
+                    <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(st.lon, st.lat, 80000))}>
+                      <b>{st.id}</b> <span>{st.kind}</span> <em>{st.elevation_m.toLocaleString()} m · {st.slope_deg}°</em>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
           <p className="why"><b>Why this route:</b> {routeData.plan.why}</p>
         </section>
       )}
