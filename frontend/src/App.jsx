@@ -28,6 +28,9 @@ const fmtHours = h => h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1)} h`
 const MODE_LABEL = { walk: '8h EVA · Walk OK', rover: '8h EVA · Rover Needed', expedition: 'Over 8h · Multi-Sol', none: 'Blocked (>20°)' }
 const MODE_COLOR = { walk: '#5fd38d', rover: '#f2c14e', expedition: '#e2572b', none: '#e5484d' }
 const ROUTE_COLOR = { direct: '#e8e0d6', safe: '#5fd38d', science: '#f2c14e' }
+const EYE_OFFSET = new Cesium.Cartesian3(0, 0, -3000) // 3 km toward camera: prevents local surface clipping while Mars (R=3396 km) hides far-side points
+const surfPos = (lon, lat) => Cesium.Cartesian3.fromDegrees(lon, lat, 400)
+const surfLine = pairs => Cesium.Cartesian3.fromDegreesArrayHeights(pairs.flatMap(([la, lo]) => [lo, la, 400]))
 const HOME = Cesium.Cartesian3.fromDegrees(-60, 0, 1.4e7)
 const glide = (camera, destination) => camera.flyTo({ destination, duration: 2.8, easingFunction: Cesium.EasingFunction.QUINTIC_IN_OUT })
 
@@ -61,6 +64,7 @@ export default function App() {
     const { scene, camera } = viewer
     scene.moon = undefined
     scene.globe.showGroundAtmosphere = false
+    scene.globe.depthTestAgainstTerrain = true
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#2a1a12')
     scene.screenSpaceCameraController.minimumZoomDistance = 2000
     viewerRef.current = viewer
@@ -87,11 +91,11 @@ export default function App() {
     // Click 1 → start pin A, click 2 → destination pin B, click 3 → start over
     const makePin = letter => Object.assign(viewer.entities.add({
       show: false,
-      point: { pixelSize: 12, outlineColor: Cesium.Color.WHITE, outlineWidth: 2, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+      point: { pixelSize: 12, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
       label: {
         font: '500 12px "JetBrains Mono", ui-monospace, monospace', pixelOffset: new Cesium.Cartesian2(0, -22),
         verticalOrigin: Cesium.VerticalOrigin.BOTTOM, fillColor: Cesium.Color.WHITE, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE, disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
       },
     }), { letter })
     const pins = [makePin('A · START'), makePin('B · DESTINATION')]
@@ -111,7 +115,7 @@ export default function App() {
         if (prev.length === 2) pins[1].show = false
         const pin = pins[next.length - 1]
         const where = `${pin.letter}\n${fmtDeg(lat, 'N', 'S')}  ${fmtDeg(lon, 'E', 'W')}`
-        pin.position = c
+        pin.position = surfPos(lon, lat)
         pin.label.text = where
         pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
         pin.show = true
@@ -143,27 +147,26 @@ export default function App() {
       const col = Cesium.Color.fromCssColorString(hex)
       const ring = Array.from({ length: 65 }, (_, i) => {
         const ang = (i / 64) * Math.PI * 2
-        return [a.lon + (radM * degPerM / cosLat) * Math.cos(ang), a.lat + (radM * degPerM) * Math.sin(ang)]
-      }).flat()
+        return [a.lat + (radM * degPerM) * Math.sin(ang), a.lon + (radM * degPerM / cosLat) * Math.cos(ang)]
+      })
       ents.add({
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 1.8, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(ring), width: 1.8, arcType: Cesium.ArcType.GEODESIC,
           material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.8), dashLength: 10 }),
         },
       })
       ents.add({
-        position: Cesium.Cartesian3.fromDegrees(a.lon, a.lat + radM * degPerM),
+        position: surfPos(a.lon, a.lat + radM * degPerM),
         label: {
           text: tag, font: '500 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -6), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 6e5),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          eyeOffset: EYE_OFFSET,
         },
       })
     }
     if (route.length < 2) { setLoadingRoute(false); return }
-    const positions = r => Cesium.Cartesian3.fromDegreesArray(r.path.flatMap(([la, lo]) => [lo, la]))
     let stale = false
     setLoadingRoute(true)
     fetch(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(r => r.json()).then(data => {
@@ -173,24 +176,24 @@ export default function App() {
       const { direct, safe, science } = data
       ents.add({
         polyline: {
-          positions: positions(direct), width: 2, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(direct.path), width: 2, arcType: Cesium.ArcType.GEODESIC,
           material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString('#e8e0d6').withAlpha(0.6), dashLength: 12 }),
         },
       })
       ents.add({
-        position: Cesium.Cartesian3.fromDegrees(direct.max_slope_at.lon, direct.max_slope_at.lat),
-        point: { pixelSize: 8, color: Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk]), disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        position: surfPos(direct.max_slope_at.lon, direct.max_slope_at.lat),
+        point: { pixelSize: 8, color: Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk]) },
         label: {
           text: `STEEPEST ${direct.max_slope_deg}°`, font: '500 11px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
           fillColor: Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk]), outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE, disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
         },
       })
       if (safe) {
         ents.add({
           polyline: {
-            positions: positions(safe), width: 5, arcType: Cesium.ArcType.GEODESIC,
+            positions: surfLine(safe.path), width: 5, arcType: Cesium.ArcType.GEODESIC,
             material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString(RISK_COLOR.safe), glowPower: 0.25 }),
           },
         })
@@ -199,19 +202,19 @@ export default function App() {
         const gold = Cesium.Color.fromCssColorString('#f2c14e')
         ents.add({
           polyline: {
-            positions: positions(science), width: 4, arcType: Cesium.ArcType.GEODESIC,
+            positions: surfLine(science.path), width: 4, arcType: Cesium.ArcType.GEODESIC,
             material: new Cesium.PolylineGlowMaterialProperty({ color: gold, glowPower: 0.2 }),
           },
         })
         for (const st of science.stations) {
           ents.add({
-            position: Cesium.Cartesian3.fromDegrees(st.lon, st.lat),
-            point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+            position: surfPos(st.lon, st.lat),
+            point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
             label: {
               text: `${st.id} · ${st.kind.toUpperCase()}`, font: '500 10px "JetBrains Mono", ui-monospace, monospace',
               pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
               fillColor: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-              style: Cesium.LabelStyle.FILL_AND_OUTLINE, disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
             },
           })
         }
@@ -244,24 +247,24 @@ export default function App() {
       const degLon = degLat / Math.max(Math.cos(w.lat * Math.PI / 180), 0.15)
       const ring = Array.from({ length: 49 }, (_, i) => {
         const ang = (i / 48) * Math.PI * 2
-        return [w.lon + degLon * Math.cos(ang), Math.max(-89.5, Math.min(89.5, w.lat + degLat * Math.sin(ang)))]
-      }).flat()
+        return [Math.max(-89.5, Math.min(89.5, w.lat + degLat * Math.sin(ang))), w.lon + degLon * Math.cos(ang)]
+      })
       ents.add({
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(ring), width: 2, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(ring), width: 2, arcType: Cesium.ArcType.GEODESIC,
           material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.75), dashLength: 12 }),
         },
       })
       ents.add({
-        position: Cesium.Cartesian3.fromDegrees(w.lon, w.lat),
-        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+        position: surfPos(w.lon, w.lat),
+        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
         label: {
           text: `[H2O] ${w.name.toUpperCase()} · ${w.yield.toUpperCase()}`,
           font: '500 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 7e6),
-          disableDepthTestDistance: Number.POSITIVE_INFINITY,
+          eyeOffset: EYE_OFFSET,
         },
       })
     }
@@ -275,15 +278,14 @@ export default function App() {
       const col = Cesium.Color.fromCssColorString(rv.color)
       ents.add({
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(rv.path.flatMap(([la, lo]) => [lo, la])),
-          width: 3, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(rv.path), width: 3, arcType: Cesium.ArcType.GEODESIC,
           material: new Cesium.PolylineGlowMaterialProperty({ color: col, glowPower: 0.2 }),
         },
       })
       for (const wp of rv.waypoints) {
         ents.add({
-          position: Cesium.Cartesian3.fromDegrees(wp.lon, wp.lat),
-          point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, disableDepthTestDistance: Number.POSITIVE_INFINITY },
+          position: surfPos(wp.lon, wp.lat),
+          point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
           label: {
             text: `${rv.name.toUpperCase()} · ${wp.label.toUpperCase()}`,
             font: '500 10px "JetBrains Mono", ui-monospace, monospace',
@@ -291,7 +293,7 @@ export default function App() {
             fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
             style: Cesium.LabelStyle.FILL_AND_OUTLINE,
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.5e5),
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            eyeOffset: EYE_OFFSET,
           },
         })
       }
@@ -302,13 +304,14 @@ export default function App() {
     ents.removeAll()
     for (const p of places) {
       ents.add({
-        position: Cesium.Cartesian3.fromDegrees(p.lon, p.lat),
+        position: surfPos(p.lon, p.lat),
         point: { pixelSize: 6, color: Cesium.Color.fromCssColorString(KIND_COLOR[p.kind]), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
         label: {
           text: p.name.toUpperCase(), font: '500 11px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
           fillColor: Cesium.Color.fromCssColorString('#e8e0d6'), outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
           style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 9e6),
+          eyeOffset: EYE_OFFSET,
         },
       })
     }
@@ -368,7 +371,7 @@ export default function App() {
     const [lat, lon] = activeRoute.path[idx]
     const km = (activeRoute.distance_m * (idx / Math.max(activeRoute.profile_m.length - 1, 1)) / 1000).toFixed(1)
     const hp = viewerRef.current.hoverPin
-    hp.position = Cesium.Cartesian3.fromDegrees(lon, lat)
+    hp.position = surfPos(lon, lat)
     hp.point.color = Cesium.Color.fromCssColorString(ROUTE_COLOR[profKey])
     hp.label.text = `${km} km · ${activeRoute.profile_m[idx].toLocaleString()} m`
     hp.show = true
