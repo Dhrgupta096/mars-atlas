@@ -84,7 +84,10 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 
 .routeinfo { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .routehead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
-.routetabs { display: flex; gap: 4px; margin-top: 8px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
+.crewbar { display: flex; gap: 4px; margin-top: 8px; }
+.crewbar button { all: unset; flex: 1; text-align: center; cursor: pointer; padding: 3px 5px; font: 500 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); }
+.crewbar button[aria-pressed="true"] { color: var(--oxide); border-color: var(--oxide); background: rgba(226, 87, 43, 0.08); }
+.routetabs { display: flex; gap: 4px; margin-top: 6px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 .routetabs button { all: unset; flex: 1; text-align: center; cursor: pointer; padding: 4px 6px; font: 500 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid transparent; }
 .routetabs button[aria-selected="true"] { color: var(--dust); border-color: var(--line); background: rgba(232, 224, 214, 0.06); }
 .badge { padding: 2px 6px; border: 1px solid; font: 500 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; }

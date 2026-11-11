@@ -43,3 +43,9 @@ https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide
 - [x] 16/18: rover surface photos & station field previews (real NASA Perseverance/Curiosity ground imagery & geological context at waypoints and stations S1–S3)
 - [x] 17/18: timed Apollo EVA cuff checklist & mission manifest (step-by-step timeline from Egress A → S1..S3 → B → Ingress A, 15-min science stops, O2 budget, exportable brief)
 - [x] 18/18: 3-format crew interface switcher (Habitat Console · Wrist Tablet Cuff · Helmet Visor HUD)
+
+## Phase 3 — Visual Fidelity, Crew Trade-Offs & Judge Submission Package
+- [x] 19/22: Retina 2x rendering, NASA Mars Odyssey THEMIS 100m + HRSC high-res detail overlay, and zero-overlap flex dock layout
+- [x] 20/22: interactive Crew & Suit configuration switcher (2-Crew 8h PLSS vs 2-Crew 10h xEMU vs 4-Crew Buddy Rovers)
+- [x] 21/22: single-command FastAPI static bundle serving (`frontend/dist`)
+- [x] 22/22: complete NASA Space Apps 2026 submission documentation & 60-second judge demo guide (`README.md`)

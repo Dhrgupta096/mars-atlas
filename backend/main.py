@@ -1,6 +1,8 @@
 """Run: uvicorn main:app --reload --port 8000"""
 from datetime import datetime, timezone
+from pathlib import Path
 from fastapi import FastAPI, Query
+from fastapi.staticfiles import StaticFiles
 from mars_time import mars_time
 from terrain import elevation, slope, risk
 from route import straight_line, safest_path, science_path, eva_plan
@@ -69,3 +71,8 @@ def rovers():
 @app.get("/api/water")
 def water():
     return water_sites()
+
+
+_DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+if _DIST.is_dir():
+    app.mount("/", StaticFiles(directory=_DIST, html=True), name="static")

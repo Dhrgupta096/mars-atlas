@@ -44,7 +44,12 @@ const fmtDeg = (v, pos, neg) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? pos : neg
 const fmtHours = h => h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1)} h`
 const toLocalIso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
 const SOL_MS = 88775244 // 1 Mars solar day (sol) = 24h 39m 35.244s in milliseconds
-const MODE_LABEL = { walk: '8h EVA · Walk OK', rover: '8h EVA · Rover Needed', expedition: 'Over 8h · Multi-Sol', none: 'Blocked (>20°)' }
+const EVA_SPECS = {
+  plss8: { key: 'plss8', short: '8h PLSS', title: '2-Crew · 8h PLSS', o2: 8.0, wb: 4.0, buddy: false },
+  xemu10: { key: 'xemu10', short: '10h xEMU', title: '2-Crew · 10h xEMU', o2: 10.0, wb: 5.0, buddy: false },
+  buddy16: { key: 'buddy16', short: 'Buddy Rovers', title: '4-Crew · 2 Buddy Rovers', o2: 16.0, wb: 16.0, buddy: true },
+}
+const MODE_LABEL = { walk: 'EVA · Walk OK', rover: 'EVA · Rover Needed', expedition: 'Over Limit · Multi-Sol', none: 'Blocked (>20°)' }
 const MODE_COLOR = { walk: '#5fd38d', rover: '#f2c14e', expedition: '#e2572b', none: '#e5484d' }
 const ROUTE_COLOR = { direct: '#e8e0d6', safe: '#5fd38d', science: '#f2c14e' }
 const EYE_OFFSET = new Cesium.Cartesian3(0, 0, -3000) // 3 km toward camera: prevents local surface clipping while Mars (R=3396 km) hides far-side points
@@ -128,6 +133,7 @@ export default function App() {
   const [dateOpen, setDateOpen] = useState(false)
   const [routeOpen, setRouteOpen] = useState(true)
   const [routeTab, setRouteTab] = useState('overview') // 'overview' | 'terrain' | 'checklist'
+  const [evaSpec, setEvaSpec] = useState('plss8')
   const [preview, setPreview] = useState(null) // {title, sub, image, pia, text, lat, lon}
   const [checkedSteps, setCheckedSteps] = useState({})
 
@@ -453,22 +459,23 @@ export default function App() {
   }
   const exportBrief = () => {
     if (!routeData || !activeRoute) return
-    const useRover = routeData.plan.mode !== 'walk'
+    const useRover = planMode !== 'walk'
     const lines = [
       'MARS ATLAS · APOLLO-STYLE EVA MISSION MANIFEST',
       '==============================================',
       `Planned UTC : ${activeDate.toISOString()}`,
       `Mars Time   : MY ${mars?.mars_year ?? '--'} · Sol ${mars ? Math.floor(mars.sol_date) : '--'} · MTC ${mars?.mtc ?? '--'} · LTST ${mars?.ltst ?? '--'} (${mars?.is_day ? 'DAYLIGHT' : 'NIGHT'})`,
-      `Selected    : ${profKey.toUpperCase()} ROUTE (${MODE_LABEL[routeData.plan.mode]})`,
+      `Crew & Suit : ${spec.title} (${spec.o2}h O2 budget · ${spec.buddy ? 'Buddy Rover Backup' : `${spec.wb}h Walk-Back Limit`})`,
+      `Selected    : ${profKey.toUpperCase()} ROUTE (${spec.o2}h ${MODE_LABEL[planMode]})`,
       `Distance    : ${(activeRoute.distance_m / 1000).toFixed(2)} km one-way · Climb +${activeRoute.climb_m} m / Descent -${activeRoute.descent_m} m`,
       `Max Slope   : ${activeRoute.max_slope_deg}° (${activeRoute.risk.toUpperCase()}) · Science Score ${activeRoute.science_score}/100`,
-      `Walk-Back   : ${fmtHours(activeRoute.walk_back_h)} B->A emergency walk-back (${activeRoute.walkback_ok ? 'WITHIN 4H LIMIT' : 'EXCEEDS 4H LIMIT'})`,
+      `Walk-Back   : ${fmtHours(activeRoute.walk_back_h)} B->A emergency walk-back (${spec.buddy || activeRoute.walk_back_h <= spec.wb ? 'SAFE' : 'EXCEEDS LIMIT'})`,
       routeData.water ? `ISRU Water  : ${routeData.water.status} — ${routeData.water.detail} (${routeData.water.source})` : '',
       `Rationale   : ${routeData.plan.why}`,
       '',
       `TIMED EVA CUFF CHECKLIST (${useRover ? 'ROVER' : 'FOOT'} TIMING):`,
       ...(activeRoute.manifest ?? []).map(m =>
-        `[${checkedSteps[m.code] ? 'X' : ' '}] ${useRover ? m.rover_t : m.walk_t} | ${m.code.padEnd(5)} | ${m.km.toFixed(2)} km | O2 ${useRover ? m.o2_rover_h : m.o2_walk_h}h rem | ${m.title} (${m.elevation_m}m)\n    -> ${m.action}`
+        `[${checkedSteps[m.code] ? 'X' : ' '}] ${useRover ? m.rover_t : m.walk_t} | ${m.code.padEnd(5)} | ${m.km.toFixed(2)} km | O2 ${Math.max(spec.o2 - (8.0 - (useRover ? m.o2_rover_h : m.o2_walk_h)), 0).toFixed(1)}h rem | ${m.title} (${m.elevation_m}m)\n    -> ${m.action}`
       ),
     ].filter(Boolean).join('\n')
     const url = URL.createObjectURL(new Blob([lines], { type: 'text/plain' }))
@@ -492,15 +499,20 @@ export default function App() {
   }
   const allSearchable = [...places, ...waterSites.filter(w => !places.some(p => p.name === w.name))]
   const results = query.trim() ? allSearchable.filter(p => (p.name + ' ' + p.kind).toLowerCase().includes(query.trim().toLowerCase())) : []
+  const spec = EVA_SPECS[evaSpec]
   const activeRoute = routeData && (routeData[profKey] ?? routeData.direct)
+  const refRoute = routeData && (routeData.safe ?? routeData.direct)
+  const planMode = !routeData ? 'none' : !routeData.safe ? 'none'
+    : (!spec.buddy && refRoute.walk_round_trip_h <= spec.o2) ? 'walk'
+    : (refRoute.rover_round_trip_h <= spec.o2) ? 'rover' : 'expedition'
   const pathLen = activeRoute ? activeRoute.path.length : 1
   const vIdx = Math.min(visorIdx, Math.max(pathLen - 1, 0))
   const [vLat, vLon] = activeRoute ? activeRoute.path[vIdx] : (route.length ? [route[0].lat, route[0].lon] : [visorAnchor.lat, visorAnchor.lon])
   const vFrac = activeRoute ? vIdx / Math.max(pathLen - 1, 1) : 0
   const vElev = activeRoute ? activeRoute.profile_m[vIdx] : null
-  const vElapsedH = activeRoute ? (activeRoute.walk_round_trip_h * 0.5) * vFrac : 0
-  const vO2RemH = Math.max(8.0 - vElapsedH, 0)
-  const vWalkBackH = activeRoute ? activeRoute.walk_back_h * vFrac : 0
+  const vElapsedH = activeRoute ? ((planMode === 'walk' ? activeRoute.walk_round_trip_h : activeRoute.rover_round_trip_h) * 0.5) * vFrac : 0
+  const vO2RemH = Math.max(spec.o2 - vElapsedH, 0)
+  const vWalkBackH = activeRoute ? (spec.buddy ? activeRoute.rover_round_trip_h * 0.5 : activeRoute.walk_back_h) * vFrac : 0
   const vRemKm = activeRoute ? ((activeRoute.distance_m * (1 - vFrac)) / 1000).toFixed(2) : '0.00'
   const cardinal = CARDINAL[Math.round(visorHeading / 45) % 8]
   const enterVisor = () => {
@@ -754,7 +766,7 @@ export default function App() {
               <div className="cufftag">WRIST CUFF · EVA-1 · {mars ? `SOL ${Math.floor(mars.sol_date)}` : 'SOL --'}</div>
               <div className="cufftitle">Forearm Field Checklist</div>
             </div>
-            <span className="cuffo2">O2 8.0H</span>
+            <span className="cuffo2">O2 {spec.o2.toFixed(1)}H</span>
           </div>
           {!routeData ? (
             <div className="cuffempty">
@@ -773,8 +785,8 @@ export default function App() {
                     <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => setProfKey(k)}>{lbl}</button>
                   ))}
                 </div>
-                <span className="badge" style={{ color: MODE_COLOR[routeData.plan.mode], borderColor: MODE_COLOR[routeData.plan.mode] }}>
-                  {routeData.plan.mode === 'walk' ? 'FOOT EVA' : 'ROVER EVA'}
+                <span className="badge" style={{ color: MODE_COLOR[planMode], borderColor: MODE_COLOR[planMode] }}>
+                  {planMode === 'walk' ? 'FOOT EVA' : 'ROVER EVA'}
                 </span>
               </div>
               {activeRoute && (
@@ -783,13 +795,13 @@ export default function App() {
                     <span><b>{(activeRoute.distance_m / 1000).toFixed(1)} km</b> DIST</span>
                     <span><b>+{activeRoute.climb_m} m</b> CLIMB</span>
                     <span><b style={{ color: RISK_COLOR[activeRoute.risk] }}>{activeRoute.max_slope_deg}°</b> MAX</span>
-                    <span><b style={{ color: activeRoute.walkback_ok ? '#5fd38d' : '#e5484d' }}>{fmtHours(activeRoute.walk_back_h)}</b> RTB</span>
+                    <span><b style={{ color: spec.buddy || activeRoute.walk_back_h <= spec.wb ? '#5fd38d' : '#e5484d' }}>{spec.buddy ? 'BUDDY' : fmtHours(activeRoute.walk_back_h)}</b> RTB</span>
                   </div>
                   <ul className="manifestlist cufflist">
                     {(activeRoute.manifest ?? []).map(m => {
-                      const useRov = routeData.plan.mode !== 'walk'
+                      const useRov = planMode !== 'walk'
                       const t = useRov ? m.rover_t : m.walk_t
-                      const o2 = useRov ? m.o2_rover_h : m.o2_walk_h
+                      const o2 = Math.max(spec.o2 - (8.0 - (useRov ? m.o2_rover_h : m.o2_walk_h)), 0).toFixed(1)
                       const done = !!checkedSteps[m.code]
                       const st = (activeRoute.stations ?? []).find(s => s.id === m.code)
                       return (
@@ -839,12 +851,19 @@ export default function App() {
             <button className="sectoggle" aria-expanded={routeOpen} onClick={() => setRouteOpen(o => !o)}>
               Route A → B {routeOpen ? '▾' : '▸'}
             </button>
-            <span className="badge" style={{ color: MODE_COLOR[routeData.plan.mode], borderColor: MODE_COLOR[routeData.plan.mode] }}>
-              {MODE_LABEL[routeData.plan.mode]}
+            <span className="badge" style={{ color: MODE_COLOR[planMode], borderColor: MODE_COLOR[planMode] }}>
+              {spec.o2}h {MODE_LABEL[planMode]}
             </span>
           </div>
           {routeOpen && (
             <>
+              <div className="crewbar" role="group" aria-label="Crew and Suit Configuration">
+                {Object.values(EVA_SPECS).map(s => (
+                  <button key={s.key} aria-pressed={evaSpec === s.key} onClick={() => setEvaSpec(s.key)} title={s.title}>
+                    {s.short}
+                  </button>
+                ))}
+              </div>
               <div className="routetabs" role="tablist">
                 <button role="tab" aria-selected={routeTab === 'overview'} onClick={() => setRouteTab('overview')}>Compare</button>
                 <button role="tab" aria-selected={routeTab === 'terrain'} onClick={() => setRouteTab('terrain')}>
@@ -867,7 +886,10 @@ export default function App() {
                         ['Science', r => `${r.science_score}/100`],
                         ['Walk (A↔B)', r => fmtHours(r.walk_round_trip_h)],
                         ['Rover (A↔B)', r => fmtHours(r.rover_round_trip_h)],
-                        ['Walk-Back', r => <span style={{ color: r.walkback_ok ? '#5fd38d' : '#e5484d' }}>{fmtHours(r.walk_back_h)} · {r.walkback_ok ? 'OK' : '>4H'}</span>],
+                        ['Walk-Back', r => {
+                          const ok = spec.buddy || r.walk_back_h <= spec.wb
+                          return <span style={{ color: ok ? '#5fd38d' : '#e5484d' }}>{spec.buddy ? 'Buddy Rover' : `${fmtHours(r.walk_back_h)} · ${ok ? 'OK' : `>${spec.wb}H`}`}</span>
+                        }],
                       ].map(([name, fmt]) => (
                         <tr key={name}>
                           <th>{name}</th>
@@ -949,7 +971,7 @@ export default function App() {
               {routeTab === 'checklist' && activeRoute && (
                 <div className="checklist">
                   <div className="profhead">
-                    <label>Timed Cuff Checklist ({routeData.plan.mode === 'walk' ? 'Foot EVA' : 'Rover EVA'})</label>
+                    <label>Timed Cuff Checklist ({planMode === 'walk' ? 'Foot EVA' : 'Rover EVA'})</label>
                     <div className="proftabs">
                       {[['science', 'Science'], ['safe', 'Safest'], ['direct', 'Direct']].map(([k, lbl]) => routeData[k] && (
                         <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => setProfKey(k)}>{lbl}</button>
@@ -958,9 +980,9 @@ export default function App() {
                   </div>
                   <ul className="manifestlist">
                     {(activeRoute.manifest ?? []).map(m => {
-                      const useRov = routeData.plan.mode !== 'walk'
+                      const useRov = planMode !== 'walk'
                       const t = useRov ? m.rover_t : m.walk_t
-                      const o2 = useRov ? m.o2_rover_h : m.o2_walk_h
+                      const o2 = Math.max(spec.o2 - (8.0 - (useRov ? m.o2_rover_h : m.o2_walk_h)), 0).toFixed(1)
                       const done = !!checkedSteps[m.code]
                       return (
                         <li key={m.code} className={done ? 'done' : ''}>
@@ -1009,14 +1031,14 @@ export default function App() {
           </div>
 
           <aside className="visor-suit">
-            <div className="suit-title">PLSS SUIT TELEMETRY · EVA-1</div>
-            <div className="suit-row"><span>O2 RESERVE</span><b style={{ color: vO2RemH > 2 ? '#5fd38d' : '#e5484d' }}>{vO2RemH.toFixed(1)} h / 8.0 h</b></div>
-            <div className="suit-bar"><div style={{ width: `${(vO2RemH / 8) * 100}%`, background: vO2RemH > 2 ? '#5fd38d' : '#e5484d' }} /></div>
+            <div className="suit-title">{spec.title.toUpperCase()}</div>
+            <div className="suit-row"><span>O2 RESERVE</span><b style={{ color: vO2RemH > 2 ? '#5fd38d' : '#e5484d' }}>{vO2RemH.toFixed(1)} h / {spec.o2.toFixed(1)} h</b></div>
+            <div className="suit-bar"><div style={{ width: `${(vO2RemH / spec.o2) * 100}%`, background: vO2RemH > 2 ? '#5fd38d' : '#e5484d' }} /></div>
             <div className="suit-row"><span>SUIT PRESS</span><b>4.3 PSI · NOMINAL</b></div>
             <div className="suit-row"><span>EVA ELAPSED</span><b>{fmtHours(vElapsedH)}</b></div>
             <div className="suit-row">
               <span>WALK-BACK A</span>
-              <b style={{ color: vWalkBackH <= 4 ? '#5fd38d' : '#e5484d' }}>{fmtHours(vWalkBackH)} · {vWalkBackH <= 4 ? 'SAFE' : '>4H LIMIT'}</b>
+              <b style={{ color: vWalkBackH <= spec.wb ? '#5fd38d' : '#e5484d' }}>{fmtHours(vWalkBackH)} · {spec.buddy ? 'BUDDY ROVER' : vWalkBackH <= spec.wb ? 'SAFE' : `>${spec.wb}H LIMIT`}</b>
             </div>
             {vElev !== null && <div className="suit-row"><span>ELEVATION</span><b>{vElev.toLocaleString()} m</b></div>}
             {activeRoute && <div className="suit-row"><span>DIST TO B</span><b>{vRemKm} km</b></div>}
