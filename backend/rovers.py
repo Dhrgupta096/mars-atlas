@@ -5,13 +5,25 @@ from terrain import elevation
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 
+_NASA_IMG = lambda pia: f"https://images-assets.nasa.gov/image/{pia}/{pia}~small.jpg"
+
 _META = [
-    ("Perseverance", "m20_traverse.json", "Jezero Crater", "Octavia E. Butler Landing", "#7fd1c7"),
-    ("Curiosity", "msl_traverse.json", "Gale Crater · Mt. Sharp", "Bradbury Landing", "#ff8a50"),
+    ("Perseverance", "m20_traverse.json", "Jezero Crater", "Octavia E. Butler Landing", "#7fd1c7", [
+        ("PIA24486", "Mastcam-Z · First 360° panorama at Octavia E. Butler Landing"),
+        ("PIA24542", "Mastcam-Z · Jezero crater floor basaltic boulder field"),
+        ("PIA24924", "Mastcam-Z · Ancient river delta scarp & Kodiak butte strata"),
+        ("PIA25287", "Mastcam-Z · Enchanted Lake finely laminated delta mudstones"),
+    ]),
+    ("Curiosity", "msl_traverse.json", "Gale Crater · Mt. Sharp", "Bradbury Landing", "#ff8a50", [
+        ("PIA16101", "Mastcam · Bradbury Landing looking toward Mount Sharp"),
+        ("PIA19803", "Mastcam · Missoula geologic contact at Marias Pass"),
+        ("PIA19920", "Mastcam · Cross-bedded sandstone & Murray mudstone strata"),
+        ("PIA21719", "Mastcam · Vera Rubin Ridge hematitic bedrock outcrop"),
+    ]),
 ]
 
 
-def _load_one(name: str, filename: str, site: str, landing: str, color: str, max_pts: int = 800) -> dict:
+def _load_one(name: str, filename: str, site: str, landing: str, color: str, photos: list, max_pts: int = 800) -> dict:
     raw = json.loads((DATA_DIR / filename).read_text())["features"]
     pts, total_m, max_sol = [], 0.0, None
     for ft in raw:
@@ -50,8 +62,12 @@ def _load_one(name: str, filename: str, site: str, landing: str, color: str, max
         "start": list(sampled[0]),
         "current": list(sampled[-1]),
         "waypoints": [
-            {"label": lbl, "detail": det, "lat": sampled[i][0], "lon": sampled[i][1], "elevation_m": elevation(*sampled[i])}
-            for lbl, i, det in milestones
+            {
+                "label": lbl, "detail": det, "lat": sampled[i][0], "lon": sampled[i][1],
+                "elevation_m": elevation(*sampled[i]), "pia": photos[k][0],
+                "caption": photos[k][1], "image": _NASA_IMG(photos[k][0]),
+            }
+            for k, (lbl, i, det) in enumerate(milestones)
         ],
         "path": [list(p) for p in sampled],
     }

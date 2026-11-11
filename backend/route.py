@@ -70,11 +70,18 @@ def _stations(lats: np.ndarray, lons: np.ndarray, heights: np.ndarray, slopes: n
             if len(picked) == k:
                 break
     picked.sort()
-    kind = lambda s: "Layered Outcrop" if s >= 8 else "Geologic Contact" if s >= 3 else "Regolith Sample"
+    meta = lambda s: (
+        ("Layered Outcrop", "PIA25287", "Mastcam-Z / SHERLOC · Core drill & UV Raman scan of laminated strata") if s >= 8 else
+        ("Geologic Contact", "PIA19803", "Mastcam / PIXL · X-ray lithochemistry across unconformity contact") if s >= 3 else
+        ("Regolith Sample", "PIA24542", "SuperCam / Drive Tube · Regolith & basaltic float cobble sample")
+    )
     return [
         {
             "id": f"S{m + 1}",
-            "kind": kind(float(slopes[i])),
+            "kind": meta(float(slopes[i]))[0],
+            "pia": meta(float(slopes[i]))[1],
+            "image": f"https://images-assets.nasa.gov/image/{meta(float(slopes[i]))[1]}/{meta(float(slopes[i]))[1]}~small.jpg",
+            "task": meta(float(slopes[i]))[2],
             "lat": round(float(lats[i]), 4),
             "lon": round(float(lons[i]), 4),
             "elevation_m": int(heights[i]),

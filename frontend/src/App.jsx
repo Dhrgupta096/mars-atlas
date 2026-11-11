@@ -84,6 +84,11 @@ export default function App() {
   const [visorIdx, setVisorIdx] = useState(0)
   const [visorHeading, setVisorHeading] = useState(65)
   const [visorAnchor, setVisorAnchor] = useState({ lat: 0, lon: -60 })
+  const [roversOpen, setRoversOpen] = useState(false)
+  const [dateOpen, setDateOpen] = useState(false)
+  const [routeOpen, setRouteOpen] = useState(true)
+  const [routeTab, setRouteTab] = useState('overview') // 'overview' | 'terrain'
+  const [preview, setPreview] = useState(null) // {title, sub, image, pia, text, lat, lon}
 
   // Globe
   useEffect(() => {
@@ -379,7 +384,12 @@ export default function App() {
     setHoverIdx(null)
     setLoadingRoute(false)
     setVisorIdx(0)
+    setPreview(null)
     hideAllPins(viewerRef)
+  }
+  const inspectStop = (item, height = 22000) => {
+    setPreview(item)
+    glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(item.lon, item.lat, height))
   }
   const flyTo = p => {
     setQuery('')
@@ -502,8 +512,7 @@ export default function App() {
 
       {!visor && (
         <section className="ui panel search">
-          <label htmlFor="q">Search Mars</label>
-          <input id="q" value={query} onChange={e => setQuery(e.target.value)} placeholder="Jezero, Olympus Mons, Curiosity…" autoComplete="off" />
+          <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mars (Jezero, Olympus…)" autoComplete="off" />
           {results.length > 0 && (
             <ul role="listbox" aria-label="Places">
               {results.map(p => (
@@ -514,20 +523,36 @@ export default function App() {
           {rovers.length > 0 && (
             <div className="rovers">
               <div className="rovhead">
-                <label>NASA Rover Traverses</label>
+                <button className="sectoggle" aria-expanded={roversOpen} onClick={() => setRoversOpen(o => !o)}>
+                  Rover Traverses ({rovers.length}) {roversOpen ? '▴' : '▾'}
+                </button>
                 <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
-                  {showRovers ? 'Tracks On' : 'Tracks Off'}
+                  {showRovers ? 'Shown' : 'Hidden'}
                 </button>
               </div>
-              {rovers.map(rv => (
+              {roversOpen && rovers.map(rv => (
                 <div key={rv.name} className="rovcard">
                   <button className="rovmain" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 32000))}>
                     <span style={{ color: rv.color }}>● {rv.name}</span>
                     <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
                   </button>
                   <div className="rovjumps">
-                    <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.start[1], rv.start[0], 18000))}>{rv.landing}</button>
-                    <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 18000))}>Current Pos →</button>
+                    {rv.waypoints.map(wp => (
+                      <button
+                        key={wp.label}
+                        onClick={() => inspectStop({
+                          title: `${rv.name} · ${wp.label}`,
+                          sub: `${wp.elevation_m.toLocaleString()} m · ${rv.site}`,
+                          image: wp.image,
+                          pia: wp.pia,
+                          text: wp.caption,
+                          lat: wp.lat,
+                          lon: wp.lon,
+                        }, 18000)}
+                      >
+                        {wp.label === 'Quarter Traverse' ? '25%' : wp.label === 'Current Position' ? 'Now →' : wp.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               ))}
@@ -536,48 +561,66 @@ export default function App() {
         </section>
       )}
 
+      {!visor && preview && (
+        <aside className="ui panel preview" aria-live="polite">
+          <div className="prevhead">
+            <div>
+              <label>NASA Surface Camera · {preview.pia}</label>
+              <div className="prevtitle">{preview.title}</div>
+            </div>
+            <button className="closebtn" onClick={() => setPreview(null)} aria-label="Close surface preview">×</button>
+          </div>
+          <img src={preview.image} alt={preview.title} className="previmg" loading="lazy" />
+          <div className="prevmeta">{preview.sub} · {fmtDeg(preview.lat, 'N', 'S')} {fmtDeg(preview.lon, 'E', 'W')}</div>
+          <p className="prevtext">{preview.text}</p>
+          <button className="prevvisor" onClick={() => { setVisorAnchor({ lat: preview.lat, lon: preview.lon }); setVisor(true) }}>
+            Open Ground View in Visor HUD →
+          </button>
+        </aside>
+      )}
+
       <section className="ui panel local" aria-live="polite">
         <div className="localhead">
           <div className="coord">{fmtDeg(center.lat, 'N', 'S')} &nbsp; {fmtDeg(center.lon, 'E', 'W')}</div>
-          <button className="livebtn" aria-pressed={simMs === null} onClick={() => setSimMs(null)}>
-            {simMs === null ? '● LIVE' : '↺ RESET LIVE'}
-          </button>
+          <div className="localbtns">
+            <button className="livebtn" aria-pressed={simMs === null} onClick={() => setSimMs(null)}>
+              {simMs === null ? '● LIVE' : '↺ LIVE'}
+            </button>
+            <button className="toggle" aria-expanded={dateOpen} onClick={() => setDateOpen(o => !o)}>
+              {dateOpen ? 'Date ▴' : 'Date ▾'}
+            </button>
+          </div>
         </div>
         <div className="big">{mars?.ltst ?? '--:--:--'}</div>
         <div className="sub">
-          Local true solar time ·{' '}
+          Solar time ·{' '}
           <span style={{ color: mars?.is_day ? '#5fd38d' : '#f2c14e' }}>
-            {mars ? (mars.is_day ? 'DAYLIGHT · EVA GO' : 'NIGHT · WAIT FOR SUNRISE') : '—'}
+            {mars ? (mars.is_day ? 'DAYLIGHT · GO' : 'NIGHT · HOLD') : '—'}
           </span>
+          {mars && <span style={{ color: mars.dust_season ? '#f2c14e' : 'var(--muted)' }}> · {mars.dust_season ? 'Dust Season' : `${mars.season_north} (N)`}</span>}
         </div>
         <div className="row">
-          <span>Sunrise <b>{mars?.sunrise_ltst ?? mars?.polar ?? '--'}</b></span>
-          <span>Sunset <b>{mars?.sunset_ltst ?? mars?.polar ?? '--'}</b></span>
+          <span>Rise <b>{mars?.sunrise_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
+          <span>Set <b>{mars?.sunset_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
           <span>Day <b>{mars ? `${mars.daylight_hours}h` : '--'}</b></span>
         </div>
-        {mars && (
-          <div className="seasonrow">
-            <span>{mars.season_north[0].toUpperCase()}{mars.season_north.slice(1)} (N) · Ls {mars.ls.toFixed(1)}°</span>
-            <em style={{ color: mars.dust_season ? '#f2c14e' : '#5fd38d' }}>
-              {mars.dust_season ? 'Dust Storm Season' : 'Clear Season'}
-            </em>
+        {dateOpen && (
+          <div className="evadate">
+            <label htmlFor="evadt">Plan Future Walk Date ({EARTH_TZ})</label>
+            <div className="dtcontrols">
+              <input
+                id="evadt"
+                type="datetime-local"
+                className="dtinput"
+                value={toLocalIso(activeDate)}
+                onChange={e => e.target.value && setSimMs(new Date(e.target.value).getTime())}
+              />
+              <button onClick={() => shiftSim(-7200e3)} title="Rewind 2 hours">-2h</button>
+              <button onClick={() => shiftSim(7200e3)} title="Advance 2 hours">+2h</button>
+              <button onClick={() => shiftSim(SOL_MS)} title="Advance 1 Martian Sol">+1 Sol</button>
+            </div>
           </div>
         )}
-        <div className="evadate">
-          <label htmlFor="evadt">Plan Future Walk Date ({EARTH_TZ})</label>
-          <div className="dtcontrols">
-            <input
-              id="evadt"
-              type="datetime-local"
-              className="dtinput"
-              value={toLocalIso(activeDate)}
-              onChange={e => e.target.value && setSimMs(new Date(e.target.value).getTime())}
-            />
-            <button onClick={() => shiftSim(-7200e3)} title="Rewind 2 hours">-2h</button>
-            <button onClick={() => shiftSim(7200e3)} title="Advance 2 hours">+2h</button>
-            <button onClick={() => shiftSim(SOL_MS)} title="Advance 1 Martian Sol (24h 39m 35s)">+1 Sol</button>
-          </div>
-        </div>
       </section>
 
       {!visor && (
@@ -589,93 +632,120 @@ export default function App() {
         </p>
       )}
 
-      {routeData && (
+      {!visor && routeData && (
         <section className="ui panel routeinfo" aria-live="polite">
           <div className="routehead">
-            <label>Route A → B · Standard detail</label>
+            <button className="sectoggle" aria-expanded={routeOpen} onClick={() => setRouteOpen(o => !o)}>
+              Route A → B {routeOpen ? '▾' : '▸'}
+            </button>
             <span className="badge" style={{ color: MODE_COLOR[routeData.plan.mode], borderColor: MODE_COLOR[routeData.plan.mode] }}>
               {MODE_LABEL[routeData.plan.mode]}
             </span>
           </div>
-          <table>
-            <thead><tr><th></th><th>Direct</th><th className="safe">Safest</th><th className="sci">Science</th></tr></thead>
-            <tbody>
-              {[
-                ['Distance', r => r.distance_m >= 10000 ? `${(r.distance_m / 1000).toFixed(1)} km` : `${r.distance_m.toLocaleString()} m`],
-                ['Climb', r => `↑ ${r.climb_m.toLocaleString()} m`],
-                ['Descent', r => `↓ ${r.descent_m.toLocaleString()} m`],
-                ['Steepest', r => <span style={{ color: RISK_COLOR[r.risk] }}>{r.max_slope_deg}° · {r.risk}</span>],
-                ['Science', r => `${r.science_score}/100`],
-                ['Walk (A↔B)', r => fmtHours(r.walk_round_trip_h)],
-                ['Rover (A↔B)', r => fmtHours(r.rover_round_trip_h)],
-                ['Walk-Back', r => <span style={{ color: r.walkback_ok ? '#5fd38d' : '#e5484d' }}>{fmtHours(r.walk_back_h)} · {r.walkback_ok ? 'OK' : '>4H'}</span>],
-              ].map(([name, fmt]) => (
-                <tr key={name}>
-                  <th>{name}</th>
-                  <td>{fmt(routeData.direct)}</td>
-                  <td>{routeData.safe ? fmt(routeData.safe) : '—'}</td>
-                  <td>{routeData.science ? fmt(routeData.science) : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {activeRoute && (
-            <div className="profile">
-              <div className="profhead">
-                <label>Elevation Profile ({hMin.toLocaleString()} m → {hMax.toLocaleString()} m)</label>
-                <div className="proftabs">
-                  {[['safe', 'Safest'], ['science', 'Science'], ['direct', 'Direct']].map(([k, lbl]) => routeData[k] && (
-                    <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => { setProfKey(k); onProfileLeave() }}>{lbl}</button>
-                  ))}
-                </div>
+          {routeOpen && (
+            <>
+              <div className="routetabs" role="tablist">
+                <button role="tab" aria-selected={routeTab === 'overview'} onClick={() => setRouteTab('overview')}>Compare Routes</button>
+                <button role="tab" aria-selected={routeTab === 'terrain'} onClick={() => setRouteTab('terrain')}>
+                  Profile & Stops ({routeData.science?.stations?.length ?? 0})
+                </button>
               </div>
-              <svg viewBox="0 0 360 56" className="profsvg" onMouseMove={onProfileHover} onMouseLeave={onProfileLeave}>
-                {['direct', 'safe', 'science'].map(k => routeData[k] && k !== profKey && (
-                  <polyline key={k} fill="none" stroke={ROUTE_COLOR[k]} strokeOpacity="0.25" strokeWidth="1.2" points={svgPts(routeData[k].profile_m)} />
-                ))}
-                <polygon fill={ROUTE_COLOR[profKey]} fillOpacity="0.14" points={`0,56 ${svgPts(activeRoute.profile_m)} 360,56`} />
-                <polyline fill="none" stroke={ROUTE_COLOR[profKey]} strokeWidth="2" points={svgPts(activeRoute.profile_m)} />
-                {hoverIdx !== null && activeRoute.profile_m[hoverIdx] !== undefined && (() => {
-                  const x = (hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) * 360
-                  const y = 52 - ((activeRoute.profile_m[hoverIdx] - hMin) / hSpan) * 48
-                  return (
-                    <g>
-                      <line x1={x} y1="0" x2={x} y2="56" stroke="#e8e0d6" strokeOpacity="0.5" strokeDasharray="2 2" />
-                      <circle cx={x} cy={y} r="3.5" fill={ROUTE_COLOR[profKey]} stroke="#0d0a09" strokeWidth="1.5" />
-                    </g>
-                  )
-                })()}
-              </svg>
-              <div className="profmeta">
-                <span>A · {activeRoute.profile_m[0]?.toLocaleString()} m</span>
-                <span>{hoverIdx !== null ? `${((activeRoute.distance_m * hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) / 1000).toFixed(1)} km · ${activeRoute.profile_m[hoverIdx].toLocaleString()} m` : 'Hover chart to trace on globe'}</span>
-                <span>B · {activeRoute.profile_m.at(-1)?.toLocaleString()} m</span>
-              </div>
-            </div>
+
+              {routeTab === 'overview' ? (
+                <>
+                  <table>
+                    <thead><tr><th></th><th>Direct</th><th className="safe">Safest</th><th className="sci">Science</th></tr></thead>
+                    <tbody>
+                      {[
+                        ['Distance', r => r.distance_m >= 10000 ? `${(r.distance_m / 1000).toFixed(1)} km` : `${r.distance_m.toLocaleString()} m`],
+                        ['Climb / Drop', r => `↑${r.climb_m.toLocaleString()} ↓${r.descent_m.toLocaleString()}m`],
+                        ['Steepest', r => <span style={{ color: RISK_COLOR[r.risk] }}>{r.max_slope_deg}° · {r.risk}</span>],
+                        ['Science', r => `${r.science_score}/100`],
+                        ['Walk (A↔B)', r => fmtHours(r.walk_round_trip_h)],
+                        ['Rover (A↔B)', r => fmtHours(r.rover_round_trip_h)],
+                        ['Walk-Back', r => <span style={{ color: r.walkback_ok ? '#5fd38d' : '#e5484d' }}>{fmtHours(r.walk_back_h)} · {r.walkback_ok ? 'OK' : '>4H'}</span>],
+                      ].map(([name, fmt]) => (
+                        <tr key={name}>
+                          <th>{name}</th>
+                          <td>{fmt(routeData.direct)}</td>
+                          <td>{routeData.safe ? fmt(routeData.safe) : '—'}</td>
+                          <td>{routeData.science ? fmt(routeData.science) : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {routeData.water && (
+                    <p className="why">
+                      <b>ISRU Water at B ({routeData.water.source}):</b> {routeData.water.status} — {routeData.water.detail}
+                    </p>
+                  )}
+                  <p className="why"><b>Why this route:</b> {routeData.plan.why}</p>
+                </>
+              ) : (
+                <>
+                  {activeRoute && (
+                    <div className="profile">
+                      <div className="profhead">
+                        <label>Elevation ({hMin.toLocaleString()}m → {hMax.toLocaleString()}m)</label>
+                        <div className="proftabs">
+                          {[['safe', 'Safest'], ['science', 'Science'], ['direct', 'Direct']].map(([k, lbl]) => routeData[k] && (
+                            <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => { setProfKey(k); onProfileLeave() }}>{lbl}</button>
+                          ))}
+                        </div>
+                      </div>
+                      <svg viewBox="0 0 360 56" className="profsvg" onMouseMove={onProfileHover} onMouseLeave={onProfileLeave}>
+                        {['direct', 'safe', 'science'].map(k => routeData[k] && k !== profKey && (
+                          <polyline key={k} fill="none" stroke={ROUTE_COLOR[k]} strokeOpacity="0.25" strokeWidth="1.2" points={svgPts(routeData[k].profile_m)} />
+                        ))}
+                        <polygon fill={ROUTE_COLOR[profKey]} fillOpacity="0.14" points={`0,56 ${svgPts(activeRoute.profile_m)} 360,56`} />
+                        <polyline fill="none" stroke={ROUTE_COLOR[profKey]} strokeWidth="2" points={svgPts(activeRoute.profile_m)} />
+                        {hoverIdx !== null && activeRoute.profile_m[hoverIdx] !== undefined && (() => {
+                          const x = (hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) * 360
+                          const y = 52 - ((activeRoute.profile_m[hoverIdx] - hMin) / hSpan) * 48
+                          return (
+                            <g>
+                              <line x1={x} y1="0" x2={x} y2="56" stroke="#e8e0d6" strokeOpacity="0.5" strokeDasharray="2 2" />
+                              <circle cx={x} cy={y} r="3.5" fill={ROUTE_COLOR[profKey]} stroke="#0d0a09" strokeWidth="1.5" />
+                            </g>
+                          )
+                        })()}
+                      </svg>
+                      <div className="profmeta">
+                        <span>A · {activeRoute.profile_m[0]?.toLocaleString()}m</span>
+                        <span>{hoverIdx !== null ? `${((activeRoute.distance_m * hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) / 1000).toFixed(1)} km · ${activeRoute.profile_m[hoverIdx].toLocaleString()} m` : 'Hover to trace on globe'}</span>
+                        <span>B · {activeRoute.profile_m.at(-1)?.toLocaleString()}m</span>
+                      </div>
+                    </div>
+                  )}
+                  {routeData.science?.stations?.length > 0 && (
+                    <div className="stations">
+                      <label>Apollo Science Stops (click for NASA ground photo)</label>
+                      <ul>
+                        {routeData.science.stations.map(st => (
+                          <li key={st.id}>
+                            <button onClick={() => inspectStop({
+                              title: `Station ${st.id} · ${st.kind}`,
+                              sub: `Elev ${st.elevation_m.toLocaleString()} m · Slope ${st.slope_deg}° · Score ${st.science_score}/100`,
+                              image: st.image,
+                              pia: st.pia,
+                              text: st.task,
+                              lat: st.lat,
+                              lon: st.lon,
+                            }, 55000)}>
+                              <b>{st.id}</b> <span>{st.kind}</span> <em>[IMG] {st.elevation_m.toLocaleString()}m · {st.slope_deg}°</em>
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+              <button className="visorlaunch" onClick={enterVisor}>
+                Enter Helmet Visor HUD ({profKey.toUpperCase()} Route) →
+              </button>
+            </>
           )}
-          {routeData.science?.stations?.length > 0 && (
-            <div className="stations">
-              <label>Apollo Science Stations (click to inspect)</label>
-              <ul>
-                {routeData.science.stations.map(st => (
-                  <li key={st.id}>
-                    <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(st.lon, st.lat, 80000))}>
-                      <b>{st.id}</b> <span>{st.kind}</span> <em>{st.elevation_m.toLocaleString()} m · {st.slope_deg}°</em>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-          {routeData.water && (
-            <p className="why">
-              <b>ISRU Water at B ({routeData.water.source}):</b> {routeData.water.status} — {routeData.water.detail}
-            </p>
-          )}
-          <p className="why"><b>Why this route:</b> {routeData.plan.why}</p>
-          <button className="visorlaunch" onClick={enterVisor}>
-            Enter Helmet Visor HUD ({profKey.toUpperCase()} Route) →
-          </button>
         </section>
       )}
 

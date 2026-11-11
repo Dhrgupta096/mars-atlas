@@ -50,6 +50,7 @@ jez_sci = science_path(18.38, 77.58, 18.65, 77.30)
 assert jez_safe is not None and jez_sci is not None and jez_sci["risk"] != "too steep"
 assert jez_sci["science_score"] > jez_safe["science_score"], (jez_sci["science_score"], jez_safe["science_score"])
 assert [st["id"] for st in jez_sci["stations"]] == ["S1", "S2", "S3"]
+assert all(st["image"].startswith("https://images-assets.nasa.gov/image/PIA") and st["task"] for st in jez_sci["stations"])
 
 # Step 13: Apollo Walk-Back safety check (B->A emergency return <= 4.0 h)
 assert short["walkback_ok"] is True and short["walk_back_h"] <= 4.0
