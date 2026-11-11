@@ -6,9 +6,11 @@ const MARS = Cesium.Ellipsoid.MARS
 Cesium.Ellipsoid.default = MARS
 
 const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ/'
+const USGS_WMS = 'https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/mars_simp_cyl.map'
 const LAYERS = {
-  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7 },
-  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5 },
+  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'THEMIS' },
+  'THEMIS 100m': { wms: 'MOLA_THEMIS_blend', maxLevel: 11, detail: 'THEMIS' },
+  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade' },
 }
 const KIND_COLOR = { rover: '#7fd1c7', lander: '#7fd1c7', ice: '#f2f0ea', volcano: '#e2572b', crater: '#d9b26f', canyon: '#d9b26f', basin: '#d9b26f', plain: '#d9b26f' }
 const EARTH_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -21,6 +23,20 @@ function trekLayer({ id, maxLevel }) {
     layer: id, style: 'default', tileMatrixSetID: 'default028mm',
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
     maximumLevel: maxLevel, credit: 'NASA / JPL-Caltech · Mars Trek',
+  })
+}
+
+function usgsWmsLayer(layerName, maxLevel = 12, minLevel = 0) {
+  return new Cesium.WebMapServiceImageryProvider({
+    url: USGS_WMS,
+    layers: layerName,
+    parameters: { format: 'image/jpeg', version: '1.1.1', srs: 'EPSG:4326' },
+    tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
+    minimumLevel: minLevel,
+    maximumLevel: maxLevel,
+    tileWidth: 512,
+    tileHeight: 512,
+    credit: 'NASA / JPL / ASU · USGS Astrogeology (THEMIS 100m)',
   })
 }
 
@@ -124,9 +140,12 @@ export default function App() {
       skyAtmosphere: false,
     })
     const { scene, camera } = viewer
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2)
+    scene.postProcessStages.fxaa.enabled = true
     scene.moon = undefined
     scene.globe.showGroundAtmosphere = false
     scene.globe.depthTestAgainstTerrain = true
+    scene.globe.maximumScreenSpaceError = 1.15
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#2a1a12')
     scene.screenSpaceCameraController.minimumZoomDistance = 2000
     viewerRef.current = viewer
@@ -285,11 +304,21 @@ export default function App() {
     return () => { stale = true }
   }, [route])
 
-  // Base layer
+  // Base layer + high-resolution 100m THEMIS / HRSC detail overlay on zoom
   useEffect(() => {
     const layers = viewerRef.current.imageryLayers
     layers.removeAll()
-    layers.addImageryProvider(trekLayer(LAYERS[layer]))
+    const cfg = LAYERS[layer]
+    const base = layers.addImageryProvider(cfg.wms ? usgsWmsLayer(cfg.wms, cfg.maxLevel) : trekLayer(cfg))
+    base.contrast = 1.16
+    base.brightness = 1.03
+    base.saturation = 1.12
+    base.gamma = 0.96
+    if (cfg.detail) {
+      const hiRes = layers.addImageryProvider(usgsWmsLayer(cfg.detail, 12, 4))
+      hiRes.alpha = cfg.wms ? 0.55 : 0.42
+      hiRes.contrast = 1.35
+    }
   }, [layer])
 
   // Places → markers
@@ -557,7 +586,10 @@ export default function App() {
       <div ref={globeRef} className="globe" />
 
       <header className="ui bar">
-        <button className="mark" onClick={goHome} aria-label="Back to full Mars view">MARS<span>/</span>ATLAS</button>
+        <div className="brand">
+          <button className="mark" onClick={goHome} aria-label="Back to full Mars view">MARS<span>/</span>ATLAS</button>
+          <span className="missiontag">ORBITAL EVA PLANNER · MOLA 32PPD + THEMIS 100M</span>
+        </div>
         <dl className="clocks">
           <div>
             <dt>{simMs !== null ? 'Planned EVA · Earth' : `Earth · ${EARTH_TZ}`}</dt>
@@ -570,133 +602,153 @@ export default function App() {
         </dl>
       </header>
 
-      {!visor && !cuff && (
-        <section className="ui panel search">
-          <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mars (Jezero, Olympus…)" autoComplete="off" />
-          {results.length > 0 && (
-            <ul role="listbox" aria-label="Places">
-              {results.map(p => (
-                <li key={p.name}><button onClick={() => flyTo(p)}><span>{p.name}</span><em>{p.kind}</em></button></li>
-              ))}
-            </ul>
-          )}
-          {rovers.length > 0 && (
-            <div className="rovers">
-              <div className="rovhead">
-                <button className="sectoggle" aria-expanded={roversOpen} onClick={() => setRoversOpen(o => !o)}>
-                  Rover Traverses ({rovers.length}) {roversOpen ? '▴' : '▾'}
-                </button>
-                <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
-                  {showRovers ? 'Shown' : 'Hidden'}
-                </button>
-              </div>
-              {roversOpen && rovers.map(rv => (
-                <div key={rv.name} className="rovcard">
-                  <button className="rovmain" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 32000))}>
-                    <span style={{ color: rv.color }}>● {rv.name}</span>
-                    <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
-                  </button>
-                  <div className="rovjumps">
-                    {rv.waypoints.map(wp => (
-                      <button
-                        key={wp.label}
-                        onClick={() => inspectStop({
-                          title: `${rv.name} · ${wp.label}`,
-                          sub: `${wp.elevation_m.toLocaleString()} m · ${rv.site}`,
-                          image: wp.image,
-                          pia: wp.pia,
-                          text: wp.caption,
-                          lat: wp.lat,
-                          lon: wp.lon,
-                        }, 18000)}
-                      >
-                        {wp.label === 'Quarter Traverse' ? '25%' : wp.label === 'Current Position' ? 'Now →' : wp.label}
-                      </button>
-                    ))}
-                  </div>
+      <div className="dock-left">
+        {!visor && !cuff && (
+          <section className="ui panel search">
+            <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mars (Jezero, Olympus…)" autoComplete="off" />
+            {results.length > 0 ? (
+              <ul role="listbox" aria-label="Places">
+                {results.map(p => (
+                  <li key={p.name}><button onClick={() => flyTo(p)}><span>{p.name}</span><em>{p.kind}</em></button></li>
+                ))}
+              </ul>
+            ) : (
+              <div className="quickhub">
+                <label>Featured Landmarks</label>
+                <div className="chipgrid">
+                  {places.filter(p => ['Jezero (Perseverance)', 'Gale (Curiosity)', 'Olympus Mons', 'Valles Marineris'].includes(p.name)).map(p => (
+                    <button key={p.name} onClick={() => flyTo(p)}>{p.name.replace(/ \(.*\)/, '')}</button>
+                  ))}
                 </div>
-              ))}
+                <label>1-Click EVA Simulations</label>
+                <div className="evacards">
+                  {PRESET_EVAS.map(p => (
+                    <button key={p.id} onClick={() => loadPreset(p)}>
+                      <span>{p.label}</span>
+                      <em>A → B</em>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {rovers.length > 0 && (
+              <div className="rovers">
+                <div className="rovhead">
+                  <button className="sectoggle" aria-expanded={roversOpen} onClick={() => setRoversOpen(o => !o)}>
+                    Rover Traverses ({rovers.length}) {roversOpen ? '▴' : '▾'}
+                  </button>
+                  <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
+                    {showRovers ? 'Shown' : 'Hidden'}
+                  </button>
+                </div>
+                {roversOpen && rovers.map(rv => (
+                  <div key={rv.name} className="rovcard">
+                    <button className="rovmain" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 32000))}>
+                      <span style={{ color: rv.color }}>● {rv.name}</span>
+                      <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
+                    </button>
+                    <div className="rovjumps">
+                      {rv.waypoints.map(wp => (
+                        <button
+                          key={wp.label}
+                          onClick={() => inspectStop({
+                            title: `${rv.name} · ${wp.label}`,
+                            sub: `${wp.elevation_m.toLocaleString()} m · ${rv.site}`,
+                            image: wp.image,
+                            pia: wp.pia,
+                            text: wp.caption,
+                            lat: wp.lat,
+                            lon: wp.lon,
+                          }, 18000)}
+                        >
+                          {wp.label === 'Quarter Traverse' ? '25%' : wp.label === 'Current Position' ? 'Now →' : wp.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        )}
+
+        <section className="ui panel local" aria-live="polite">
+          <div className="localhead">
+            <div className="coord">{fmtDeg(center.lat, 'N', 'S')} &nbsp; {fmtDeg(center.lon, 'E', 'W')}</div>
+            <div className="localbtns">
+              <button className="livebtn" aria-pressed={simMs === null} onClick={() => setSimMs(null)}>
+                {simMs === null ? '● LIVE' : '↺ LIVE'}
+              </button>
+              <button className="toggle" aria-expanded={dateOpen} onClick={() => setDateOpen(o => !o)}>
+                {dateOpen ? 'Date ▴' : 'Date ▾'}
+              </button>
+            </div>
+          </div>
+          <div className="big">{mars?.ltst ?? '--:--:--'}</div>
+          <div className="sub">
+            Solar time ·{' '}
+            <span style={{ color: mars?.is_day ? '#5fd38d' : '#f2c14e' }}>
+              {mars ? (mars.is_day ? 'DAYLIGHT · GO' : 'NIGHT · HOLD') : '—'}
+            </span>
+            {mars && <span style={{ color: mars.dust_season ? '#f2c14e' : 'var(--muted)' }}> · {mars.dust_season ? 'Dust Season' : `${mars.season_north} (N)`}</span>}
+          </div>
+          <div className="row">
+            <span>Rise <b>{mars?.sunrise_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
+            <span>Set <b>{mars?.sunset_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
+            <span>Day <b>{mars ? `${mars.daylight_hours}h` : '--'}</b></span>
+          </div>
+          {dateOpen && (
+            <div className="evadate">
+              <label htmlFor="evadt">Plan Future Walk Date ({EARTH_TZ})</label>
+              <div className="dtcontrols">
+                <input
+                  id="evadt"
+                  type="datetime-local"
+                  className="dtinput"
+                  value={toLocalIso(activeDate)}
+                  onChange={e => e.target.value && setSimMs(new Date(e.target.value).getTime())}
+                />
+                <button onClick={() => shiftSim(-7200e3)} title="Rewind 2 hours">-2h</button>
+                <button onClick={() => shiftSim(7200e3)} title="Advance 2 hours">+2h</button>
+                <button onClick={() => shiftSim(SOL_MS)} title="Advance 1 Martian Sol">+1 Sol</button>
+              </div>
             </div>
           )}
         </section>
-      )}
-
-      {!visor && preview && (
-        <aside className="ui panel preview" aria-live="polite">
-          <div className="prevhead">
-            <div>
-              <label>NASA Surface Camera · {preview.pia}</label>
-              <div className="prevtitle">{preview.title}</div>
-            </div>
-            <button className="closebtn" onClick={() => setPreview(null)} aria-label="Close surface preview">×</button>
-          </div>
-          <img src={preview.image} alt={preview.title} className="previmg" loading="lazy" />
-          <div className="prevmeta">{preview.sub} · {fmtDeg(preview.lat, 'N', 'S')} {fmtDeg(preview.lon, 'E', 'W')}</div>
-          <p className="prevtext">{preview.text}</p>
-          <button className="prevvisor" onClick={() => { setVisorAnchor({ lat: preview.lat, lon: preview.lon }); setVisor(true) }}>
-            Open Ground View in Visor HUD →
-          </button>
-        </aside>
-      )}
-
-      <section className="ui panel local" aria-live="polite">
-        <div className="localhead">
-          <div className="coord">{fmtDeg(center.lat, 'N', 'S')} &nbsp; {fmtDeg(center.lon, 'E', 'W')}</div>
-          <div className="localbtns">
-            <button className="livebtn" aria-pressed={simMs === null} onClick={() => setSimMs(null)}>
-              {simMs === null ? '● LIVE' : '↺ LIVE'}
-            </button>
-            <button className="toggle" aria-expanded={dateOpen} onClick={() => setDateOpen(o => !o)}>
-              {dateOpen ? 'Date ▴' : 'Date ▾'}
-            </button>
-          </div>
-        </div>
-        <div className="big">{mars?.ltst ?? '--:--:--'}</div>
-        <div className="sub">
-          Solar time ·{' '}
-          <span style={{ color: mars?.is_day ? '#5fd38d' : '#f2c14e' }}>
-            {mars ? (mars.is_day ? 'DAYLIGHT · GO' : 'NIGHT · HOLD') : '—'}
-          </span>
-          {mars && <span style={{ color: mars.dust_season ? '#f2c14e' : 'var(--muted)' }}> · {mars.dust_season ? 'Dust Season' : `${mars.season_north} (N)`}</span>}
-        </div>
-        <div className="row">
-          <span>Rise <b>{mars?.sunrise_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
-          <span>Set <b>{mars?.sunset_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
-          <span>Day <b>{mars ? `${mars.daylight_hours}h` : '--'}</b></span>
-        </div>
-        {dateOpen && (
-          <div className="evadate">
-            <label htmlFor="evadt">Plan Future Walk Date ({EARTH_TZ})</label>
-            <div className="dtcontrols">
-              <input
-                id="evadt"
-                type="datetime-local"
-                className="dtinput"
-                value={toLocalIso(activeDate)}
-                onChange={e => e.target.value && setSimMs(new Date(e.target.value).getTime())}
-              />
-              <button onClick={() => shiftSim(-7200e3)} title="Rewind 2 hours">-2h</button>
-              <button onClick={() => shiftSim(7200e3)} title="Advance 2 hours">+2h</button>
-              <button onClick={() => shiftSim(SOL_MS)} title="Advance 1 Martian Sol">+1 Sol</button>
-            </div>
-          </div>
-        )}
-      </section>
+      </div>
 
       {!visor && !cuff && (
         <p className="ui hint" aria-live="polite">
+          <span className="hintdot" />
           {loadingRoute
             ? 'Computing safest & science routes across MOLA terrain…'
-            : ['Click Mars to set start point A', 'Click to set destination B', 'Route A → B active · click Mars for new A'][route.length]}
-          {route.length === 0 && !loadingRoute && PRESET_EVAS.map(p => (
-            <button key={p.id} className="presetbtn" onClick={() => loadPreset(p)}>{p.label}</button>
-          ))}
+            : ['Step 1/2 · Click Mars to set start pin A', 'Step 2/2 · Click destination pin B', 'EVA Route A → B active · click Mars for new A'][route.length]}
           {route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
         </p>
       )}
 
-      {!visor && cuff && (
-        <aside className="ui panel cuff" aria-label="Astronaut Forearm Wrist Cuff Display">
+      {!visor && (preview || cuff || routeData) && (
+        <div className="dock-right">
+          {preview && (
+            <aside className="ui panel preview" aria-live="polite">
+              <div className="prevhead">
+                <div>
+                  <label>NASA Surface Camera · {preview.pia}</label>
+                  <div className="prevtitle">{preview.title}</div>
+                </div>
+                <button className="closebtn" onClick={() => setPreview(null)} aria-label="Close surface preview">×</button>
+              </div>
+              <img src={preview.image} alt={preview.title} className="previmg" loading="lazy" />
+              <div className="prevmeta">{preview.sub} · {fmtDeg(preview.lat, 'N', 'S')} {fmtDeg(preview.lon, 'E', 'W')}</div>
+              <p className="prevtext">{preview.text}</p>
+              <button className="prevvisor" onClick={() => { setVisorAnchor({ lat: preview.lat, lon: preview.lon }); setVisor(true) }}>
+                Open Ground View in Visor HUD →
+              </button>
+            </aside>
+          )}
+
+          {cuff && (
+            <aside className="ui panel cuff" aria-label="Astronaut Forearm Wrist Cuff Display">
           <div className="cuffhead">
             <div>
               <div className="cufftag">WRIST CUFF · EVA-1 · {mars ? `SOL ${Math.floor(mars.sol_date)}` : 'SOL --'}</div>
@@ -781,8 +833,8 @@ export default function App() {
         </aside>
       )}
 
-      {!visor && !cuff && routeData && (
-        <section className="ui panel routeinfo" aria-live="polite">
+          {!cuff && routeData && (
+            <section className="ui panel routeinfo" aria-live="polite">
           <div className="routehead">
             <button className="sectoggle" aria-expanded={routeOpen} onClick={() => setRouteOpen(o => !o)}>
               Route A → B {routeOpen ? '▾' : '▸'}
@@ -938,7 +990,9 @@ export default function App() {
               </button>
             </>
           )}
-        </section>
+            </section>
+          )}
+        </div>
       )}
 
       {visor && (
