@@ -78,6 +78,7 @@ def _stations(lats: np.ndarray, lons: np.ndarray, heights: np.ndarray, slopes: n
     return [
         {
             "id": f"S{m + 1}",
+            "idx": i,
             "kind": meta(float(slopes[i]))[0],
             "pia": meta(float(slopes[i]))[1],
             "image": f"https://images-assets.nasa.gov/image/{meta(float(slopes[i]))[1]}/{meta(float(slopes[i]))[1]}~small.jpg",
@@ -92,6 +93,62 @@ def _stations(lats: np.ndarray, lons: np.ndarray, heights: np.ndarray, slopes: n
     ]
 
 
+def _hm(hours: float) -> str:
+    m = round(max(hours, 0.0) * 60)
+    return f"T+{m // 60:02d}:{m % 60:02d}"
+
+
+def _manifest(lats, lons, heights, seg, grade, walk_back: float, rover_back: float, stations: list[dict]) -> list[dict]:
+    """Apollo-style timed EVA cuff checklist: Airlock Egress A -> Science Stops S1..S3 (+15m each) -> Dest B (+20m) -> Ingress A."""
+    steps = [{
+        "code": "EVA-A", "title": "Airlock Egress · Start A",
+        "lat": round(float(lats[0]), 4), "lon": round(float(lons[0]), 4), "elevation_m": int(heights[0]),
+        "km": 0.0, "walk_t": "T+00:00", "rover_t": "T+00:00", "o2_walk_h": 8.0, "o2_rover_h": 8.0,
+        "action": "PLSS suit integrity check (4.3 PSI), comm link sync, egress habitat airlock",
+    }]
+    w_cum = r_cum = d_cum = 0.0
+    prev = 0
+    for st in stations:
+        idx = st["idx"]
+        dw, dr = _hours(seg[prev:idx], grade[prev:idx]) if idx > prev else (0.0, 0.0)
+        d_cum += float(seg[prev:idx].sum()) / 1000 if idx > prev else 0.0
+        w_cum += dw
+        r_cum += dr
+        steps.append({
+            "code": st["id"], "title": f"Station {st['id']} · {st['kind']}",
+            "lat": st["lat"], "lon": st["lon"], "elevation_m": st["elevation_m"],
+            "km": round(d_cum, 2), "walk_t": _hm(w_cum), "rover_t": _hm(r_cum),
+            "o2_walk_h": round(max(8.0 - w_cum, 0.0), 1), "o2_rover_h": round(max(8.0 - r_cum, 0.0), 1),
+            "action": f"15 min stop · {st['task']}",
+        })
+        w_cum += 0.25  # 15 min station sampling
+        r_cum += 0.25
+        prev = idx
+
+    end = len(lats) - 1
+    dw, dr = _hours(seg[prev:end], grade[prev:end]) if end > prev else (0.0, 0.0)
+    d_cum += float(seg[prev:end].sum()) / 1000 if end > prev else 0.0
+    w_cum += dw
+    r_cum += dr
+    steps.append({
+        "code": "OBJ-B", "title": "Destination B · Primary Objective",
+        "lat": round(float(lats[-1]), 4), "lon": round(float(lons[-1]), 4), "elevation_m": int(heights[-1]),
+        "km": round(d_cum, 2), "walk_t": _hm(w_cum), "rover_t": _hm(r_cum),
+        "o2_walk_h": round(max(8.0 - w_cum, 0.0), 1), "o2_rover_h": round(max(8.0 - r_cum, 0.0), 1),
+        "action": "20 min stop · Primary site survey, subsurface core & ISRU assay",
+    })
+    w_cum += 1 / 3 + walk_back
+    r_cum += 1 / 3 + rover_back
+    steps.append({
+        "code": "RTB-A", "title": "Return Traverse & Airlock Ingress A",
+        "lat": round(float(lats[0]), 4), "lon": round(float(lons[0]), 4), "elevation_m": int(heights[0]),
+        "km": round(d_cum * 2, 2), "walk_t": _hm(w_cum), "rover_t": _hm(r_cum),
+        "o2_walk_h": round(max(8.0 - w_cum, 0.0), 1), "o2_rover_h": round(max(8.0 - r_cum, 0.0), 1),
+        "action": "Return B→A, dust mitigation brush-down, ingress airlock & repressurise",
+    })
+    return steps
+
+
 def _analyse(lats, lons, d) -> dict:
     """Shared stats for any path: climb, descent, steepest point, risk, travel times, science score & stations."""
     heights = np.array([elevation(la, lo) for la, lo in zip(lats, lons)])
@@ -104,6 +161,7 @@ def _analyse(lats, lons, d) -> dict:
     walk_back, rover_back = _hours(seg, -grade)  # return trip: uphill and downhill swap
     exp = _sci_exposure(slopes)
     sci_score = round(float((0.4 * exp.mean() + 0.6 * np.percentile(exp, 80)) * 100))
+    stations = _stations(lats, lons, heights, slopes)
     return {
         "distance_m": round(d),
         "climb_m": int(dh[dh > 0].sum()),
@@ -118,7 +176,8 @@ def _analyse(lats, lons, d) -> dict:
         "rover_h": round(rover_out, 2),
         "rover_round_trip_h": round(rover_out + rover_back, 2),
         "science_score": sci_score,
-        "stations": _stations(lats, lons, heights, slopes),
+        "stations": stations,
+        "manifest": _manifest(lats, lons, heights, seg, grade, walk_back, rover_back, stations),
         "path": [[round(float(la), 5), round(float(lo), 5)] for la, lo in zip(lats, lons)],
         "profile_m": heights.tolist(),
     }

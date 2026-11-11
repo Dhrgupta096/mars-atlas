@@ -94,6 +94,20 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .stations em { font-style: normal; color: var(--muted); }
 .why { margin: 8px 0 0; font: 11px/1.45 var(--sans); color: var(--dust); }
 .why b { font: 500 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: block; margin-bottom: 2px; }
+.checklist { margin-top: 8px; }
+.manifestlist { list-style: none; margin: 6px 0 0; padding: 0; max-height: 220px; overflow-y: auto; }
+.manifestlist li { padding: 5px 0; border-bottom: 1px solid var(--line); }
+.manifestlist li.done { opacity: 0.5; }
+.manrow { display: flex; align-items: center; gap: 6px; }
+.manrow input { accent-color: #5fd38d; cursor: pointer; margin: 0; }
+.manjump { all: unset; flex: 1; display: flex; justify-content: space-between; align-items: center; cursor: pointer; font: 10px var(--mono); color: var(--dust); }
+.manjump:hover { color: var(--oxide); }
+.manjump b { color: #5fd38d; margin-right: 6px; }
+.manjump span { flex: 1; text-transform: uppercase; }
+.manjump em { font-style: normal; color: var(--muted); }
+.manact { margin: 2px 0 0 18px; font: 10px/1.35 var(--sans); color: var(--muted); }
+.exportbtn { all: unset; box-sizing: border-box; width: 100%; margin-top: 8px; padding: 6px 8px; text-align: center; cursor: pointer; font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--dust); border: 1px solid var(--line); }
+.exportbtn:hover { border-color: #5fd38d; color: #5fd38d; }
 
 .preview { left: 300px; bottom: 24px; width: 290px; z-index: 15; }
 .prevhead { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }

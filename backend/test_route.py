@@ -55,4 +55,8 @@ assert all(st["image"].startswith("https://images-assets.nasa.gov/image/PIA") an
 # Step 13: Apollo Walk-Back safety check (B->A emergency return <= 4.0 h)
 assert short["walkback_ok"] is True and short["walk_back_h"] <= 4.0
 assert far["walkback_ok"] is False and far["walk_back_h"] > 4.0
+
+# Step 17: Timed Apollo EVA Cuff Checklist & Mission Manifest
+assert [m["code"] for m in jez_sci["manifest"]] == ["EVA-A", "S1", "S2", "S3", "OBJ-B", "RTB-A"]
+assert jez_sci["manifest"][0]["walk_t"] == "T+00:00" and jez_sci["manifest"][-1]["km"] > jez_sci["manifest"][-2]["km"]
 print("all route checks passed")

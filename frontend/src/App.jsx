@@ -87,8 +87,9 @@ export default function App() {
   const [roversOpen, setRoversOpen] = useState(false)
   const [dateOpen, setDateOpen] = useState(false)
   const [routeOpen, setRouteOpen] = useState(true)
-  const [routeTab, setRouteTab] = useState('overview') // 'overview' | 'terrain'
+  const [routeTab, setRouteTab] = useState('overview') // 'overview' | 'terrain' | 'checklist'
   const [preview, setPreview] = useState(null) // {title, sub, image, pia, text, lat, lon}
+  const [checkedSteps, setCheckedSteps] = useState({})
 
   // Globe
   useEffect(() => {
@@ -385,7 +386,32 @@ export default function App() {
     setLoadingRoute(false)
     setVisorIdx(0)
     setPreview(null)
+    setCheckedSteps({})
     hideAllPins(viewerRef)
+  }
+  const exportBrief = () => {
+    if (!routeData || !activeRoute) return
+    const useRover = routeData.plan.mode !== 'walk'
+    const lines = [
+      'MARS ATLAS · APOLLO-STYLE EVA MISSION MANIFEST',
+      '==============================================',
+      `Planned UTC : ${activeDate.toISOString()}`,
+      `Mars Time   : MY ${mars?.mars_year ?? '--'} · Sol ${mars ? Math.floor(mars.sol_date) : '--'} · MTC ${mars?.mtc ?? '--'} · LTST ${mars?.ltst ?? '--'} (${mars?.is_day ? 'DAYLIGHT' : 'NIGHT'})`,
+      `Selected    : ${profKey.toUpperCase()} ROUTE (${MODE_LABEL[routeData.plan.mode]})`,
+      `Distance    : ${(activeRoute.distance_m / 1000).toFixed(2)} km one-way · Climb +${activeRoute.climb_m} m / Descent -${activeRoute.descent_m} m`,
+      `Max Slope   : ${activeRoute.max_slope_deg}° (${activeRoute.risk.toUpperCase()}) · Science Score ${activeRoute.science_score}/100`,
+      `Walk-Back   : ${fmtHours(activeRoute.walk_back_h)} B->A emergency walk-back (${activeRoute.walkback_ok ? 'WITHIN 4H LIMIT' : 'EXCEEDS 4H LIMIT'})`,
+      routeData.water ? `ISRU Water  : ${routeData.water.status} — ${routeData.water.detail} (${routeData.water.source})` : '',
+      `Rationale   : ${routeData.plan.why}`,
+      '',
+      `TIMED EVA CUFF CHECKLIST (${useRover ? 'ROVER' : 'FOOT'} TIMING):`,
+      ...(activeRoute.manifest ?? []).map(m =>
+        `[${checkedSteps[m.code] ? 'X' : ' '}] ${useRover ? m.rover_t : m.walk_t} | ${m.code.padEnd(5)} | ${m.km.toFixed(2)} km | O2 ${useRover ? m.o2_rover_h : m.o2_walk_h}h rem | ${m.title} (${m.elevation_m}m)\n    -> ${m.action}`
+      ),
+    ].filter(Boolean).join('\n')
+    const url = URL.createObjectURL(new Blob([lines], { type: 'text/plain' }))
+    Object.assign(document.createElement('a'), { href: url, download: `mars-eva-sol-${mars ? Math.floor(mars.sol_date) : 'plan'}.txt` }).click()
+    URL.revokeObjectURL(url)
   }
   const inspectStop = (item, height = 22000) => {
     setPreview(item)
@@ -645,13 +671,16 @@ export default function App() {
           {routeOpen && (
             <>
               <div className="routetabs" role="tablist">
-                <button role="tab" aria-selected={routeTab === 'overview'} onClick={() => setRouteTab('overview')}>Compare Routes</button>
+                <button role="tab" aria-selected={routeTab === 'overview'} onClick={() => setRouteTab('overview')}>Compare</button>
                 <button role="tab" aria-selected={routeTab === 'terrain'} onClick={() => setRouteTab('terrain')}>
-                  Profile & Stops ({routeData.science?.stations?.length ?? 0})
+                  Stops ({routeData.science?.stations?.length ?? 0})
+                </button>
+                <button role="tab" aria-selected={routeTab === 'checklist'} onClick={() => setRouteTab('checklist')}>
+                  Checklist
                 </button>
               </div>
 
-              {routeTab === 'overview' ? (
+              {routeTab === 'overview' && (
                 <>
                   <table>
                     <thead><tr><th></th><th>Direct</th><th className="safe">Safest</th><th className="sci">Science</th></tr></thead>
@@ -681,7 +710,8 @@ export default function App() {
                   )}
                   <p className="why"><b>Why this route:</b> {routeData.plan.why}</p>
                 </>
-              ) : (
+              )}
+              {routeTab === 'terrain' && (
                 <>
                   {activeRoute && (
                     <div className="profile">
@@ -740,6 +770,45 @@ export default function App() {
                     </div>
                   )}
                 </>
+              )}
+              {routeTab === 'checklist' && activeRoute && (
+                <div className="checklist">
+                  <div className="profhead">
+                    <label>Timed Cuff Checklist ({routeData.plan.mode === 'walk' ? 'Foot EVA' : 'Rover EVA'})</label>
+                    <div className="proftabs">
+                      {[['science', 'Science'], ['safe', 'Safest'], ['direct', 'Direct']].map(([k, lbl]) => routeData[k] && (
+                        <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => setProfKey(k)}>{lbl}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <ul className="manifestlist">
+                    {(activeRoute.manifest ?? []).map(m => {
+                      const useRov = routeData.plan.mode !== 'walk'
+                      const t = useRov ? m.rover_t : m.walk_t
+                      const o2 = useRov ? m.o2_rover_h : m.o2_walk_h
+                      const done = !!checkedSteps[m.code]
+                      return (
+                        <li key={m.code} className={done ? 'done' : ''}>
+                          <div className="manrow">
+                            <input
+                              type="checkbox"
+                              checked={done}
+                              onChange={() => setCheckedSteps(p => ({ ...p, [m.code]: !p[m.code] }))}
+                              aria-label={`Mark ${m.title} complete`}
+                            />
+                            <button className="manjump" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(m.lon, m.lat, 45000))}>
+                              <b>{t}</b> <span>{m.title}</span> <em>O2 {o2}h</em>
+                            </button>
+                          </div>
+                          <div className="manact">{m.km} km · {m.elevation_m.toLocaleString()} m — {m.action}</div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <button className="exportbtn" onClick={exportBrief}>
+                    Download EVA Mission Brief (.txt) ↓
+                  </button>
+                </div>
               )}
               <button className="visorlaunch" onClick={enterVisor}>
                 Enter Helmet Visor HUD ({profKey.toUpperCase()} Route) →
