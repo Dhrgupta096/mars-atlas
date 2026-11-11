@@ -6,11 +6,11 @@ const MARS = Cesium.Ellipsoid.MARS
 Cesium.Ellipsoid.default = MARS
 
 const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ/'
-const OPM_CDN = 'https://cartocdn-gusc.global.ssl.fastly.net/opmbuilder/api/v1/map/named/opm-mars-basemap-v0-2/all/{z}/{x}/{y}.png'
+const USGS_WMS = 'https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/mars_simp_cyl.map'
 const LAYERS = {
-  'Atlas HD': { opm: true, maxLevel: 13, tint: 'Mars_Viking_MDIM21_ClrMosaic_global_232m' },
-  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detailOpm: true },
-  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detailOpm: true },
+  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'THEMIS', detailMin: 6, detailAlpha: 0.42 },
+  'THEMIS 100m': { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'MOLA_THEMIS_blend', detailMin: 4, detailAlpha: 0.88 },
+  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade', detailMin: 5, detailAlpha: 0.48 },
 }
 const KIND_COLOR = { rover: '#7fd1c7', lander: '#7fd1c7', ice: '#f2f0ea', volcano: '#e2572b', crater: '#d9b26f', canyon: '#d9b26f', basin: '#d9b26f', plain: '#d9b26f' }
 const EARTH_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -26,13 +26,17 @@ function trekLayer({ id, maxLevel }) {
   })
 }
 
-function opmCdnLayer(maxLevel = 13, minLevel = 0) {
-  return new Cesium.UrlTemplateImageryProvider({
-    url: OPM_CDN,
-    tilingScheme: new Cesium.WebMercatorTilingScheme({ ellipsoid: MARS }),
+function usgsWmsLayer(layerName, maxLevel = 11, minLevel = 5) {
+  return new Cesium.WebMapServiceImageryProvider({
+    url: USGS_WMS,
+    layers: layerName,
+    parameters: { format: 'image/jpeg', version: '1.1.1', srs: 'EPSG:4326' },
+    tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
     minimumLevel: minLevel,
     maximumLevel: maxLevel,
-    credit: 'OpenPlanetaryMap · NASA MOLA / Viking / CTX (Fastly CDN)',
+    tileWidth: 256,
+    tileHeight: 256,
+    credit: 'NASA / JPL / ASU / ESA · USGS Astrogeology (THEMIS 100m / HRSC)',
   })
 }
 
@@ -219,7 +223,7 @@ export default function App() {
   const globeRef = useRef(null)
   const viewerRef = useRef(null)
   const audioRef = useRef(false)
-  const [layer, setLayer] = useState('Atlas HD')
+  const [layer, setLayer] = useState('Imagery')
   const [places, setPlaces] = useState([])
   const [query, setQuery] = useState('')
   const [center, setCenter] = useState({ lat: 0, lon: -60 })
@@ -517,32 +521,20 @@ export default function App() {
     }
   }, [route, routeData, profKey, showHazards])
 
-  // Fastly CDN OpenPlanetaryMap XYZ pyramid (zoom 0–13) + NASA Mars Trek WMTS layers
+  // Real NASA Mars Trek WMTS base (zoom 0–7) + high-resolution 100m THEMIS / HRSC detail overlay on deep zoom
   useEffect(() => {
     const layers = viewerRef.current.imageryLayers
     layers.removeAll()
     const cfg = LAYERS[layer]
-    if (cfg.opm) {
-      const base = layers.addImageryProvider(opmCdnLayer(cfg.maxLevel, 0))
-      base.contrast = 1.18
-      base.brightness = 1.02
-      base.saturation = 1.15
-      if (cfg.tint) {
-        const tint = layers.addImageryProvider(trekLayer({ id: cfg.tint, maxLevel: 7 }))
-        tint.alpha = 0.28
-        tint.saturation = 1.35
-      }
-      return
-    }
     const base = layers.addImageryProvider(trekLayer(cfg))
-    base.contrast = 1.16
+    base.contrast = 1.18
     base.brightness = 1.03
-    base.saturation = 1.12
+    base.saturation = 1.14
     base.gamma = 0.96
-    if (cfg.detailOpm) {
-      const hiRes = layers.addImageryProvider(opmCdnLayer(13, 4))
-      hiRes.alpha = 0.44
-      hiRes.contrast = 1.28
+    if (cfg.detail) {
+      const hiRes = layers.addImageryProvider(usgsWmsLayer(cfg.detail, 11, cfg.detailMin))
+      hiRes.alpha = cfg.detailAlpha
+      hiRes.contrast = 1.32
     }
   }, [layer])
 
