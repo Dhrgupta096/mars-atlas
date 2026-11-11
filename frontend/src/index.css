@@ -12,8 +12,21 @@
 * { box-sizing: border-box; }
 html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: var(--dust); font-family: var(--sans); overflow: hidden; }
 .globe { position: fixed; inset: 0; }
-.globe::after { content: ""; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, rgba(226, 87, 43, 0.06) 0%, rgba(13, 10, 9, 0.45) 85%); }
+.globe::after { content: ""; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, rgba(226, 87, 43, 0.06) 0%, rgba(13, 10, 9, 0.45) 85%); transition: background .5s; }
+.globe.dust-haze::after { background: radial-gradient(circle at 50% 50%, rgba(242, 193, 78, 0.14) 0%, rgba(226, 87, 43, 0.12) 45%, rgba(13, 10, 9, 0.55) 88%); }
 .cesium-viewer-bottom { opacity: 0.35; }
+
+.intro-card { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 25; width: 420px; max-width: calc(100vw - 40px); padding: 22px 26px; background: rgba(13, 10, 9, 0.9); border: 1px solid rgba(226, 87, 43, 0.5); border-top: 3px solid var(--oxide); backdrop-filter: blur(12px); text-align: center; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75); animation: introFade .5s ease-out; }
+@keyframes introFade { from { opacity: 0; transform: translate(-50%, -46%); } to { opacity: 1; transform: translate(-50%, -50%); } }
+.intro-kicker { font: 600 9px var(--mono); letter-spacing: 0.18em; color: var(--oxide); }
+.intro-card h1 { margin: 10px 0 6px; font: 600 28px/1 var(--mono); letter-spacing: 0.28em; color: var(--dust); }
+.intro-card h1 span { color: var(--oxide); margin: 0 0.15em; }
+.intro-card p { margin: 0 0 16px; font: 13px/1.4 var(--sans); color: var(--muted); }
+.intro-actions { display: flex; gap: 8px; }
+.intro-actions button { all: unset; flex: 1; padding: 9px 10px; cursor: pointer; font: 600 10px var(--mono); letter-spacing: 0.1em; text-transform: uppercase; border: 1px solid var(--line); color: var(--dust); transition: background .2s, border-color .2s; }
+.intro-actions button:hover { border-color: var(--oxide); color: var(--oxide); }
+.intro-actions .intro-primary { background: var(--oxide); border-color: var(--oxide); color: var(--basalt); }
+.intro-actions .intro-primary:hover { opacity: 0.9; color: var(--basalt); }
 
 .bar { position: fixed; top: 0; left: 0; right: 0; z-index: 12; display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; border-bottom: 1px solid var(--line); background: linear-gradient(180deg, rgba(13, 10, 9, 0.94) 0%, rgba(13, 10, 9, 0.4) 100%); pointer-events: none; }
 .brand { display: flex; align-items: center; gap: 14px; }
@@ -147,7 +160,9 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .navsep { display: inline-block; width: 1px; height: 24px; background: var(--line); vertical-align: middle; margin: 0 2px; }
 .layers button { all: unset; cursor: pointer; padding: 7px 11px; font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); transition: color .2s, background .25s; }
 .layers button[aria-pressed="true"] { color: var(--basalt); background: var(--dust); font-weight: 600; }
+.layers button.sunbtn[aria-pressed="true"] { color: var(--basalt); background: #f2c14e; }
 .layers button.waterbtn[aria-pressed="true"] { color: var(--basalt); background: #56b4e9; }
+.layers button.hazbtn[aria-pressed="true"] { color: var(--basalt); background: #e5484d; }
 .layers button.cuffbtn[aria-pressed="true"] { color: var(--basalt); background: #f2c14e; }
 .layers button.visorbtn[aria-pressed="true"] { color: var(--basalt); background: var(--oxide); }
 .layers button:hover:not([aria-pressed="true"]), .layers button:focus-visible { color: var(--dust); }
@@ -167,12 +182,15 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .cufflist { max-height: 250px; }
 .cuffimgbtn { all: unset; cursor: pointer; padding: 2px 6px; border: 1px solid #f2c14e; font: 600 9px var(--mono); color: #f2c14e; }
 .cuffimgbtn:hover { background: #f2c14e; color: var(--basalt); }
-.cuffactions { display: grid; grid-template-columns: 1fr 1.2fr auto; gap: 6px; margin-top: 10px; }
-.cuffactions button { all: unset; padding: 7px 10px; text-align: center; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--line); color: var(--dust); }
+.cuffactions { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 5px; margin-top: 10px; }
+.cuffactions button { all: unset; padding: 7px 8px; text-align: center; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .06em; text-transform: uppercase; border: 1px solid var(--line); color: var(--dust); }
 .cuffactions button:hover { border-color: var(--dust); }
 .cuffactions .cuffvisor { background: var(--oxide); border-color: var(--oxide); color: var(--basalt); }
 
-.visorlaunch { all: unset; box-sizing: border-box; display: block; width: 100%; margin-top: 12px; padding: 9px 12px; text-align: center; cursor: pointer; font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--basalt); background: var(--oxide); transition: opacity .2s; }
+.routeactions { display: grid; grid-template-columns: 1.2fr 1fr; gap: 6px; margin-top: 10px; }
+.replaybtn { all: unset; box-sizing: border-box; padding: 8px 10px; text-align: center; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: #5fd38d; border: 1px solid #5fd38d; background: rgba(95, 211, 141, 0.08); transition: background .2s, color .2s; }
+.replaybtn:hover, .replaybtn[aria-pressed="true"] { background: #5fd38d; color: var(--basalt); }
+.visorlaunch { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 8px 10px; text-align: center; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--basalt); background: var(--oxide); transition: opacity .2s; }
 .visorlaunch:hover { opacity: .88; }
 
 .visor { position: fixed; inset: 0; pointer-events: none; z-index: 20; box-shadow: inset 0 0 120px 36px rgba(13, 10, 9, 0.88); border: 1px solid rgba(226, 87, 43, 0.28); border-radius: 28px; margin: 10px; }

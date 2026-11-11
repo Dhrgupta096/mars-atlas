@@ -104,6 +104,69 @@ const PRESET_EVAS = [
 function setMinZoom(ref, dist) {
   if (ref.current) ref.current.scene.screenSpaceCameraController.minimumZoomDistance = dist
 }
+function buildWhy(routeData, spec) {
+  if (!routeData) return ''
+  const { direct, safe, science } = routeData
+  if (!safe) return 'Every path to B crosses slopes over 20°. Pick a different destination.'
+  const extraKm = ((safe.distance_m - direct.distance_m) / 1000).toFixed(1)
+  let base = direct.risk === 'too steep'
+    ? `Safest route avoids a ${direct.max_slope_deg}° cliff on the direct line (+${extraKm} km).`
+    : safe.max_slope_deg < direct.max_slope_deg - 2
+      ? `Safest route cuts max slope from ${direct.max_slope_deg}° to ${safe.max_slope_deg}° (+${extraKm} km).`
+      : 'Direct line is already gentle, so the safest route stays close to it.'
+  if (science && science.science_score > safe.science_score) {
+    const sciKm = Math.max((science.distance_m - direct.distance_m) / 1000, 0).toFixed(1)
+    base += ` Science route boosts outcrop yield from ${safe.science_score} to ${science.science_score}/100 (+${sciKm} km vs direct, ${science.stations.length} stations).`
+  }
+  if (!spec.buddy && safe.walk_round_trip_h <= spec.o2) {
+    return `${base} Walking there and back takes ${safe.walk_round_trip_h.toFixed(1)} h, inside one ${spec.o2} h (${spec.short}) EVA.`
+  }
+  if (safe.rover_round_trip_h <= spec.o2) {
+    const wb = spec.buddy
+      ? `covered by 2nd Buddy Rover backup (${safe.rover_round_trip_h.toFixed(1)} h round trip)`
+      : safe.walk_back_h <= spec.wb
+        ? `within the ${spec.wb} h walk-back limit (${safe.walk_back_h.toFixed(1)} h B→A)`
+        : `past the ${spec.wb} h walk-back limit (${safe.walk_back_h.toFixed(1)} h B→A; switch to Buddy Rovers)`
+    return `${base} Too far to walk (${safe.walk_round_trip_h.toFixed(1)} h); by rover it's ${safe.rover_round_trip_h.toFixed(1)} h inside ${spec.o2} h (${wb}).`
+  }
+  return `${base} Too far for one ${spec.o2} h (${spec.short}) EVA even by rover (${safe.rover_round_trip_h.toFixed(1)} h). Needs a multi-sol expedition.`
+}
+function syncSunlight(ref, enabled, mars, center) {
+  const v = ref.current
+  if (!v) return
+  const { scene } = v
+  scene.globe.enableLighting = enabled
+  scene.globe.dynamicAtmosphereLighting = false
+  const ents = v.sunLayer?.entities
+  if (!ents) return
+  ents.removeAll()
+  if (!enabled || !mars) return
+  const subLat = mars.solar_declination ?? 0
+  const subLon = ((center.lon + (12 - (mars.ltst_hours ?? 12)) * 15 + 540) % 360) - 180
+  const sunPos = Cesium.Cartesian3.fromDegrees(subLon, subLat, 1e7)
+  const dir = Cesium.Cartesian3.negate(Cesium.Cartesian3.normalize(sunPos, new Cesium.Cartesian3()), new Cesium.Cartesian3())
+  scene.light = new Cesium.DirectionalLight({
+    direction: dir,
+    color: Cesium.Color.fromCssColorString(mars.dust_season ? '#ffdcb8' : '#fff5ea'),
+    intensity: mars.dust_season ? 1.9 : 2.15,
+  })
+  // Draw solar terminator great circle (90° from subsolar point)
+  const r = Math.PI / 180, phi0 = subLat * r, lam0 = subLon * r
+  const term = Array.from({ length: 73 }, (_, i) => {
+    const az = (i / 72) * Math.PI * 2
+    const sinPhi = Math.cos(phi0) * Math.cos(az)
+    const lat = Math.asin(Math.max(-1, Math.min(1, sinPhi))) / r
+    const lon = (lam0 + Math.atan2(Math.sin(az), -Math.sin(phi0) * Math.cos(az))) / r
+    return [lat, ((lon + 540) % 360) - 180]
+  })
+  const col = Cesium.Color.fromCssColorString(mars.dust_season ? '#f2c14e' : '#e2572b')
+  ents.add({
+    polyline: {
+      positions: surfLine(term), width: 1.8, arcType: Cesium.ArcType.GEODESIC,
+      material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.55), dashLength: 14 }),
+    },
+  })
+}
 
 export default function App() {
   const globeRef = useRef(null)
@@ -136,6 +199,10 @@ export default function App() {
   const [evaSpec, setEvaSpec] = useState('plss8')
   const [preview, setPreview] = useState(null) // {title, sub, image, pia, text, lat, lon}
   const [checkedSteps, setCheckedSteps] = useState({})
+  const [intro, setIntro] = useState(true)
+  const [sunlight, setSunlight] = useState(true)
+  const [showHazards, setShowHazards] = useState(true)
+  const [replaying, setReplaying] = useState(false)
 
   // Globe
   useEffect(() => {
@@ -163,9 +230,12 @@ export default function App() {
     viewer.dataSources.add(viewer.roversLayer)
     viewer.waterLayer = new Cesium.CustomDataSource('water')
     viewer.dataSources.add(viewer.waterLayer)
+    viewer.sunLayer = new Cesium.CustomDataSource('sun')
+    viewer.dataSources.add(viewer.sunLayer)
 
-    camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-60, 0, 6e7) })
+    camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-135, 18, 5.2e7) })
     glide(camera, HOME)
+    const introTimer = setTimeout(() => setIntro(false), 4200)
 
     const onMove = () => {
       const c = camera.pickEllipsoid(new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2), MARS)
@@ -193,6 +263,8 @@ export default function App() {
     handler.setInputAction(e => { downPos = Cesium.Cartesian2.clone(e.position) }, Cesium.ScreenSpaceEventType.LEFT_DOWN)
     handler.setInputAction(e => {
       if (downPos && Cesium.Cartesian2.distance(downPos, e.position) > 5) return // ignore drags
+      setIntro(false)
+      setReplaying(false)
       const c = camera.pickEllipsoid(e.position, MARS)
       if (!c) return
       const g = MARS.cartesianToCartographic(c)
@@ -219,16 +291,29 @@ export default function App() {
         return next
       })
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
-    return () => { handler.destroy(); viewer.destroy() }
+    return () => { clearTimeout(introTimer); handler.destroy(); viewer.destroy() }
   }, [])
 
-  // A set → draw 6 km Foot-EVA ring & 12 km Apollo Walk-Back Safety Limit ring; A + B set → fetch routes
+  // A + B set → fetch routes
+  useEffect(() => {
+    if (route.length < 2) return
+    const [a, b] = route
+    let stale = false
+    getJson(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(data => {
+      if (stale) return
+      setLoadingRoute(false)
+      setRouteData(data)
+    }).catch(() => { if (!stale) setLoadingRoute(false) })
+    return () => { stale = true }
+  }, [route])
+
+  // Render walk-back rings, 3D route lines, 3D vertical station beacons, and MOLA slope hazard zones
   useEffect(() => {
     const ents = viewerRef.current.routeLayer.entities
     ents.removeAll()
     setHoverMarker(viewerRef, false)
     if (route.length < 1) return
-    const [a, b] = route
+    const [a] = route
     const degPerM = 1 / 59158 // 1° latitude on Mars ≈ 59.16 km
     const cosLat = Math.max(Math.cos(a.lat * Math.PI / 180), 0.05)
     for (const [radM, hex, tag] of [[6000, '#5fd38d', '6 KM FOOT EVA LIMIT'], [12000, '#f2c14e', '12 KM ROVER WALK-BACK LIMIT']]) {
@@ -254,61 +339,95 @@ export default function App() {
         },
       })
     }
-    if (route.length < 2) return
-    let stale = false
-    getJson(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(data => {
-      if (stale) return
-      setLoadingRoute(false)
-      setRouteData(data)
-      const { direct, safe, science } = data
+    if (!routeData) return
+    const { direct, safe, science, hazards } = routeData
+    ents.add({
+      polyline: {
+        positions: surfLine(direct.path), width: profKey === 'direct' ? 4 : 2, arcType: Cesium.ArcType.GEODESIC,
+        material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString('#e8e0d6').withAlpha(profKey === 'direct' ? 0.95 : 0.55), dashLength: 12 }),
+      },
+    })
+    const stCol = Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk])
+    ents.add({
+      polyline: {
+        positions: Cesium.Cartesian3.fromDegreesArrayHeights([direct.max_slope_at.lon, direct.max_slope_at.lat, 400, direct.max_slope_at.lon, direct.max_slope_at.lat, 2400]),
+        width: 2, material: stCol.withAlpha(0.75),
+      },
+    })
+    ents.add({
+      position: Cesium.Cartesian3.fromDegrees(direct.max_slope_at.lon, direct.max_slope_at.lat, 2400),
+      point: { pixelSize: 8, color: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+      label: {
+        text: `STEEPEST ${direct.max_slope_deg}°`, font: '500 11px "JetBrains Mono", ui-monospace, monospace',
+        pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+        fillColor: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+      },
+    })
+    if (safe) {
       ents.add({
         polyline: {
-          positions: surfLine(direct.path), width: 2, arcType: Cesium.ArcType.GEODESIC,
-          material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString('#e8e0d6').withAlpha(0.6), dashLength: 12 }),
+          positions: surfLine(safe.path), width: profKey === 'safe' ? 6.5 : 4, arcType: Cesium.ArcType.GEODESIC,
+          material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString(RISK_COLOR.safe), glowPower: profKey === 'safe' ? 0.32 : 0.18 }),
         },
       })
+    }
+    if (science) {
+      const gold = Cesium.Color.fromCssColorString('#f2c14e')
       ents.add({
-        position: surfPos(direct.max_slope_at.lon, direct.max_slope_at.lat),
-        point: { pixelSize: 8, color: Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk]) },
-        label: {
-          text: `STEEPEST ${direct.max_slope_deg}°`, font: '500 11px "JetBrains Mono", ui-monospace, monospace',
-          pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
-          fillColor: Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk]), outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+        polyline: {
+          positions: surfLine(science.path), width: profKey === 'science' ? 6.5 : 4, arcType: Cesium.ArcType.GEODESIC,
+          material: new Cesium.PolylineGlowMaterialProperty({ color: gold, glowPower: profKey === 'science' ? 0.32 : 0.18 }),
         },
       })
-      if (safe) {
+      for (const st of science.stations) {
         ents.add({
           polyline: {
-            positions: surfLine(safe.path), width: 5, arcType: Cesium.ArcType.GEODESIC,
-            material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString(RISK_COLOR.safe), glowPower: 0.25 }),
+            positions: Cesium.Cartesian3.fromDegreesArrayHeights([st.lon, st.lat, 400, st.lon, st.lat, 2800]),
+            width: 2.2, material: gold.withAlpha(0.85),
+          },
+        })
+        ents.add({
+          position: Cesium.Cartesian3.fromDegrees(st.lon, st.lat, 2800),
+          point: { pixelSize: 10, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+          label: {
+            text: `${st.id} · ${st.kind.toUpperCase()} (${st.elevation_m}M)`, font: '600 10px "JetBrains Mono", ui-monospace, monospace',
+            pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            fillColor: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
           },
         })
       }
-      if (science) {
-        const gold = Cesium.Color.fromCssColorString('#f2c14e')
+    }
+    if (showHazards && hazards) {
+      for (const hz of hazards) {
+        const hCol = Cesium.Color.fromCssColorString(hz.slope_deg >= 20 ? '#e5484d' : hz.slope_deg >= 10 ? '#f2c14e' : '#e2572b')
+        const hDegLat = (hz.radius_km * 1000) * degPerM
+        const hDegLon = hDegLat / Math.max(Math.cos(hz.lat * Math.PI / 180), 0.05)
+        const hRing = Array.from({ length: 37 }, (_, i) => {
+          const ang = (i / 36) * Math.PI * 2
+          return [hz.lat + hDegLat * Math.sin(ang), hz.lon + hDegLon * Math.cos(ang)]
+        })
         ents.add({
           polyline: {
-            positions: surfLine(science.path), width: 4, arcType: Cesium.ArcType.GEODESIC,
-            material: new Cesium.PolylineGlowMaterialProperty({ color: gold, glowPower: 0.2 }),
+            positions: surfLine(hRing), width: 1.6, arcType: Cesium.ArcType.GEODESIC,
+            material: new Cesium.PolylineDashMaterialProperty({ color: hCol.withAlpha(0.75), dashLength: 8 }),
           },
         })
-        for (const st of science.stations) {
-          ents.add({
-            position: surfPos(st.lon, st.lat),
-            point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
-            label: {
-              text: `${st.id} · ${st.kind.toUpperCase()}`, font: '500 10px "JetBrains Mono", ui-monospace, monospace',
-              pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-              fillColor: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-              style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
-            },
-          })
-        }
+        ents.add({
+          position: surfPos(hz.lon, hz.lat),
+          point: { pixelSize: 6, color: hCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+          label: {
+            text: `HAZARD ${hz.slope_deg}°`, font: '500 9px "JetBrains Mono", ui-monospace, monospace',
+            pixelOffset: new Cesium.Cartesian2(0, -10), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+            fillColor: hCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+            style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3.5e5),
+            eyeOffset: EYE_OFFSET,
+          },
+        })
       }
-    }).catch(() => { if (!stale) setLoadingRoute(false) })
-    return () => { stale = true }
-  }, [route])
+    }
+  }, [route, routeData, profKey, showHazards])
 
   // Base layer + high-resolution 100m THEMIS / HRSC detail overlay on zoom
   useEffect(() => {
@@ -432,6 +551,11 @@ export default function App() {
     return () => clearInterval(id)
   }, [center, simMs])
 
+  // Live solar terminator & directional sunlight on the globe
+  useEffect(() => {
+    syncSunlight(viewerRef, sunlight, mars, center)
+  }, [sunlight, mars, center])
+
   // UI entrance
   useEffect(() => {
     const ctx = gsap.context(() => gsap.from('.ui', { opacity: 0, y: 10, duration: 0.9, stagger: 0.08, delay: 1.6, ease: 'power3.out' }))
@@ -443,12 +567,15 @@ export default function App() {
     setRouteData(null)
     setHoverIdx(null)
     setLoadingRoute(false)
+    setReplaying(false)
     setVisorIdx(0)
     setPreview(null)
     setCheckedSteps({})
     hideAllPins(viewerRef)
   }
   const loadPreset = p => {
+    setIntro(false)
+    setReplaying(false)
     setRouteData(null)
     setHoverIdx(null)
     setLoadingRoute(true)
@@ -471,7 +598,7 @@ export default function App() {
       `Max Slope   : ${activeRoute.max_slope_deg}° (${activeRoute.risk.toUpperCase()}) · Science Score ${activeRoute.science_score}/100`,
       `Walk-Back   : ${fmtHours(activeRoute.walk_back_h)} B->A emergency walk-back (${spec.buddy || activeRoute.walk_back_h <= spec.wb ? 'SAFE' : 'EXCEEDS LIMIT'})`,
       routeData.water ? `ISRU Water  : ${routeData.water.status} — ${routeData.water.detail} (${routeData.water.source})` : '',
-      `Rationale   : ${routeData.plan.why}`,
+      `Rationale   : ${whyText}`,
       '',
       `TIMED EVA CUFF CHECKLIST (${useRover ? 'ROVER' : 'FOOT'} TIMING):`,
       ...(activeRoute.manifest ?? []).map(m =>
@@ -500,12 +627,49 @@ export default function App() {
   const allSearchable = [...places, ...waterSites.filter(w => !places.some(p => p.name === w.name))]
   const results = query.trim() ? allSearchable.filter(p => (p.name + ' ' + p.kind).toLowerCase().includes(query.trim().toLowerCase())) : []
   const spec = EVA_SPECS[evaSpec]
+  const whyText = buildWhy(routeData, spec)
   const activeRoute = routeData && (routeData[profKey] ?? routeData.direct)
   const refRoute = routeData && (routeData.safe ?? routeData.direct)
   const planMode = !routeData ? 'none' : !routeData.safe ? 'none'
     : (!spec.buddy && refRoute.walk_round_trip_h <= spec.o2) ? 'walk'
     : (refRoute.rover_round_trip_h <= spec.o2) ? 'rover' : 'expedition'
   const pathLen = activeRoute ? activeRoute.path.length : 1
+
+  // Mission Replay: automated drone camera flyover along the selected route from A -> S1..S3 -> B
+  useEffect(() => {
+    if (!replaying || !activeRoute || visor) return
+    const pts = activeRoute.path
+    const prof = activeRoute.profile_m
+    const total = pts.length
+    if (total < 2) return
+    const steps = Math.min(total, 14)
+    let k = 0
+    let timer = null
+    const stepFly = () => {
+      const idx = Math.min(Math.round((k / (steps - 1)) * (total - 1)), total - 1)
+      const [lat, lon] = pts[idx]
+      const [nLat, nLon] = pts[Math.min(idx + 1, total - 1)]
+      const [pLat, pLon] = pts[Math.max(idx - 1, 0)]
+      const hdg = idx < total - 1 ? bearingDeg(lat, lon, nLat, nLon) : bearingDeg(pLat, pLon, lat, lon)
+      const km = ((activeRoute.distance_m * (idx / (total - 1))) / 1000).toFixed(1)
+      setHoverIdx(idx)
+      setHoverMarker(viewerRef, true, lon, lat, ROUTE_COLOR[profKey], `FLYOVER · ${km} km · ${prof[idx]?.toLocaleString()} m`)
+      viewerRef.current?.camera.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat, 14000),
+        orientation: { heading: Cesium.Math.toRadians(hdg), pitch: Cesium.Math.toRadians(-32), roll: 0 },
+        duration: 1.15,
+        easingFunction: Cesium.EasingFunction.LINEAR_NONE,
+      })
+      k += 1
+      if (k < steps) {
+        timer = setTimeout(stepFly, 1200)
+      } else {
+        timer = setTimeout(() => { setReplaying(false); setHoverIdx(null); setHoverMarker(viewerRef, false) }, 1400)
+      }
+    }
+    stepFly()
+    return () => { if (timer) clearTimeout(timer) }
+  }, [replaying, activeRoute, profKey, visor])
   const vIdx = Math.min(visorIdx, Math.max(pathLen - 1, 0))
   const [vLat, vLon] = activeRoute ? activeRoute.path[vIdx] : (route.length ? [route[0].lat, route[0].lon] : [visorAnchor.lat, visorAnchor.lon])
   const vFrac = activeRoute ? vIdx / Math.max(pathLen - 1, 1) : 0
@@ -595,7 +759,19 @@ export default function App() {
 
   return (
     <>
-      <div ref={globeRef} className="globe" />
+      <div ref={globeRef} className={`globe${mars?.dust_season && sunlight ? ' dust-haze' : ''}`} />
+
+      {intro && !visor && (
+        <div className="intro-card" role="dialog" aria-label="Mission Briefing">
+          <div className="intro-kicker">ORBITAL TELEMETRY LOCK · MRO + MGS MOLA 32PPD</div>
+          <h1>MARS<span>/</span>ATLAS</h1>
+          <p>Interplanetary Survival Guide &amp; Martian EVA Route Planner</p>
+          <div className="intro-actions">
+            <button className="intro-primary" onClick={() => setIntro(false)}>Enter Mission Console →</button>
+            <button onClick={() => loadPreset(PRESET_EVAS[0])}>Launch Jezero Delta EVA →</button>
+          </div>
+        </div>
+      )}
 
       <header className="ui bar">
         <div className="brand">
@@ -834,9 +1010,10 @@ export default function App() {
                     })}
                   </ul>
                   <div className="cuffactions">
+                    <button onClick={() => setReplaying(r => !r)}>{replaying ? '■ Stop' : '▶ Fly'}</button>
                     <button onClick={exportBrief}>Brief ↓</button>
-                    <button className="cuffvisor" onClick={enterVisor}>Visor HUD →</button>
-                    <button onClick={clearRoute}>× Clear</button>
+                    <button className="cuffvisor" onClick={enterVisor}>Visor →</button>
+                    <button onClick={clearRoute}>×</button>
                   </div>
                 </>
               )}
@@ -905,7 +1082,7 @@ export default function App() {
                       <b>ISRU Water at B ({routeData.water.source}):</b> {routeData.water.status} — {routeData.water.detail}
                     </p>
                   )}
-                  <p className="why"><b>Why this route:</b> {routeData.plan.why}</p>
+                  <p className="why"><b>Why this route ({spec.short}):</b> {whyText}</p>
                 </>
               )}
               {routeTab === 'terrain' && (
@@ -1007,9 +1184,14 @@ export default function App() {
                   </button>
                 </div>
               )}
-              <button className="visorlaunch" onClick={enterVisor}>
-                Enter Helmet Visor HUD ({profKey.toUpperCase()} Route) →
-              </button>
+              <div className="routeactions">
+                <button className="replaybtn" aria-pressed={replaying} onClick={() => setReplaying(r => !r)}>
+                  {replaying ? '■ Stop Flyover' : `▶ Fly ${profKey.toUpperCase()} Route`}
+                </button>
+                <button className="visorlaunch" onClick={enterVisor}>
+                  Visor HUD →
+                </button>
+              </div>
             </>
           )}
             </section>
@@ -1066,9 +1248,17 @@ export default function App() {
         {Object.keys(LAYERS).map(k => (
           <button key={k} aria-pressed={layer === k} onClick={() => setLayer(k)}>{k}</button>
         ))}
-        <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
-          Water & ISRU
+        <button className="sunbtn" aria-pressed={sunlight} onClick={() => setSunlight(s => !s)} title="Toggle real Mars24 day/night shadow and solar terminator">
+          Sunlight
         </button>
+        <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
+          Water
+        </button>
+        {routeData && (
+          <button className="hazbtn" aria-pressed={showHazards} onClick={() => setShowHazards(h => !h)} title="Toggle MOLA steep slope & cliff hazard zones">
+            Hazards
+          </button>
+        )}
         <span className="navsep" aria-hidden="true" />
         <button aria-pressed={!visor && !cuff} onClick={() => { setCuff(false); if (visor) exitVisor() }}>
           Console

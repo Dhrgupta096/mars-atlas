@@ -1,5 +1,5 @@
 """Run: python test_route.py"""
-from route import distance_m, straight_line, safest_path, science_path, eva_plan, _hours
+from route import distance_m, straight_line, safest_path, science_path, eva_plan, slope_hazards, _hours
 
 # Quarter of Mars' equator = pi/2 * 3389.5 km
 assert abs(distance_m(0, 0, 0, 90) - 5324.2e3) < 1e3
@@ -59,4 +59,8 @@ assert far["walkback_ok"] is False and far["walk_back_h"] > 4.0
 # Step 17: Timed Apollo EVA Cuff Checklist & Mission Manifest
 assert [m["code"] for m in jez_sci["manifest"]] == ["EVA-A", "S1", "S2", "S3", "OBJ-B", "RTB-A"]
 assert jez_sci["manifest"][0]["walk_t"] == "T+00:00" and jez_sci["manifest"][-1]["km"] > jez_sci["manifest"][-2]["km"]
+
+# Hazard zones around route
+haz = slope_hazards(18.38, 77.58, 18.65, 77.30)
+assert len(haz) >= 2 and haz[0]["slope_deg"] >= haz[-1]["slope_deg"] and "radius_km" in haz[0]
 print("all route checks passed")

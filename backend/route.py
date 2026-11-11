@@ -300,3 +300,46 @@ def _astar(lat1, lon1, lat2, lon2, spread, mode="safe") -> dict | None:
     lats[0], lons[0], lats[-1], lons[-1] = lat1, lon1, lat2, lon2
     d = sum(distance_m(lats[k], lons[k], lats[k + 1], lons[k + 1]) for k in range(len(lats) - 1))
     return _analyse(lats, lons, d)
+
+
+def slope_hazards(lat1: float, lon1: float, lat2: float, lon2: float, k: int = 6) -> list[dict]:
+    """Extract top steep/cliff hazard zones from the MOLA DEM bounding box around A and B."""
+    nrows, ncols = DEM.shape
+    lon2u = lon1 + ((lon2 - lon1 + 180) % 360 - 180)
+    r1, c1 = (90 - lat1) * PPD, (lon1 % 360) * PPD
+    r2, c2 = (90 - lat2) * PPD, c1 + (lon2u - lon1) * PPD
+    pad = max(12, int(0.45 * max(abs(r2 - r1), abs(c2 - c1))))
+    rmin, rmax = max(int(min(r1, r2) - pad), 0), min(int(max(r1, r2) + pad) + 1, nrows)
+    cmin, cmax = int(min(c1, c2) - pad), int(max(c1, c2) + pad) + 1
+    pre = max(1, ceil(max(rmax - rmin, cmax - cmin) / 600))
+    rows_f, cols_f = np.arange(rmin, rmax, pre), np.arange(cmin, cmax, pre)
+    if len(rows_f) < 2 or len(cols_f) < 2:
+        return []
+    z = DEM[rows_f][:, cols_f % ncols].astype(float)
+    dy_f = PIXEL_M * pre
+    dx_f = dy_f * np.maximum(np.cos(np.radians(90 - (rows_f + 0.5) / PPD)), 0.01)
+    gy, gx = np.gradient(z)
+    s_f = np.degrees(np.arctan(np.hypot(gx / dx_f[:, None], gy / dy_f)))
+    H, W = s_f.shape
+    min_sep = max(3, min(H, W) // 5)
+    picked = []
+    for flat_idx in np.argsort(-s_f, axis=None):
+        i, j = divmod(int(flat_idx), W)
+        val = float(s_f[i, j])
+        if val < 6.0 and len(picked) >= 2:
+            break
+        if all(hypot(i - pi, j - pj) >= min_sep for pi, pj in picked):
+            picked.append((i, j))
+            if len(picked) == k:
+                break
+    return [
+        {
+            "lat": round(float(90 - (rows_f[i] + 0.5) / PPD), 4),
+            "lon": round(float(((cols_f[j] + 0.5) / PPD + 180) % 360 - 180), 4),
+            "slope_deg": round(float(s_f[i, j]), 1),
+            "elevation_m": int(z[i, j]),
+            "risk": risk(float(s_f[i, j])),
+            "radius_km": round(max(1.8, min(float(s_f[i, j]) * 0.14, 4.5)), 2),
+        }
+        for i, j in picked
+    ]
