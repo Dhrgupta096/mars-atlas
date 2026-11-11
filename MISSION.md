@@ -42,4 +42,4 @@ https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide
 - [x] 15/18: future EVA date & daylight window planner (pick any future UTC date/time, compute future Sol/Ls/sunrise/sunset, dust-storm season warning, + LIVE reset)
 - [x] 16/18: rover surface photos & station field previews (real NASA Perseverance/Curiosity ground imagery & geological context at waypoints and stations S1–S3)
 - [x] 17/18: timed Apollo EVA cuff checklist & mission manifest (step-by-step timeline from Egress A → S1..S3 → B → Ingress A, 15-min science stops, O2 budget, exportable brief)
-- [ ] 18/18: 3-format crew interface switcher (Habitat Console · Wrist Tablet Cuff · Helmet Visor HUD)
+- [x] 18/18: 3-format crew interface switcher (Habitat Console · Wrist Tablet Cuff · Helmet Visor HUD)

@@ -57,6 +57,29 @@ function hideAllPins(ref) {
   for (const p of ref.current?.pins ?? []) p.show = false
   setHoverMarker(ref, false)
 }
+function setPinAB(ref, a, b) {
+  const pins = ref.current?.pins
+  if (!pins) return
+  ;[a, b].forEach((pt, idx) => {
+    const pin = pins[idx]
+    const where = `${pin.letter}\n${fmtDeg(pt.lat, 'N', 'S')}  ${fmtDeg(pt.lon, 'E', 'W')}`
+    pin.position = surfPos(pt.lon, pt.lat)
+    pin.label.text = where
+    pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
+    pin.show = true
+    getJson(`/api/terrain?lat=${pt.lat.toFixed(4)}&lon=${pt.lon.toFixed(4)}`)
+      .then(t => {
+        const w = t.water ? `\nWater: ${t.water.status} (${t.water.detail})` : ''
+        pin.label.text = `${where}\nHeight ${t.elevation_m.toLocaleString()} m\nSlope ${t.slope_deg}° · ${t.risk.toUpperCase()}${w}`
+        pin.point.color = Cesium.Color.fromCssColorString(RISK_COLOR[t.risk])
+      })
+      .catch(() => {})
+  })
+}
+const PRESET_EVAS = [
+  { id: 'jezero', label: 'Jezero Delta EVA', a: { lat: 18.4446, lon: 77.4509 }, b: { lat: 18.515, lon: 77.375 } },
+  { id: 'gale', label: 'Gale → Mt. Sharp EVA', a: { lat: -4.5895, lon: 137.4417 }, b: { lat: -4.67, lon: 137.385 } },
+]
 function setMinZoom(ref, dist) {
   if (ref.current) ref.current.scene.screenSpaceCameraController.minimumZoomDistance = dist
 }
@@ -81,6 +104,7 @@ export default function App() {
   const [showWater, setShowWater] = useState(true)
   const [loadingRoute, setLoadingRoute] = useState(false)
   const [visor, setVisor] = useState(false)
+  const [cuff, setCuff] = useState(false)
   const [visorIdx, setVisorIdx] = useState(0)
   const [visorHeading, setVisorHeading] = useState(65)
   const [visorAnchor, setVisorAnchor] = useState({ lat: 0, lon: -60 })
@@ -389,6 +413,15 @@ export default function App() {
     setCheckedSteps({})
     hideAllPins(viewerRef)
   }
+  const loadPreset = p => {
+    setRouteData(null)
+    setHoverIdx(null)
+    setLoadingRoute(true)
+    setCheckedSteps({})
+    setPinAB(viewerRef, p.a, p.b)
+    setRoute([p.a, p.b])
+    glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees((p.a.lon + p.b.lon) / 2, (p.a.lat + p.b.lat) / 2, 52000))
+  }
   const exportBrief = () => {
     if (!routeData || !activeRoute) return
     const useRover = routeData.plan.mode !== 'walk'
@@ -442,6 +475,7 @@ export default function App() {
   const vRemKm = activeRoute ? ((activeRoute.distance_m * (1 - vFrac)) / 1000).toFixed(2) : '0.00'
   const cardinal = CARDINAL[Math.round(visorHeading / 45) % 8]
   const enterVisor = () => {
+    setCuff(false)
     setVisorAnchor(center)
     setVisorIdx(0)
     setVisor(true)
@@ -536,7 +570,7 @@ export default function App() {
         </dl>
       </header>
 
-      {!visor && (
+      {!visor && !cuff && (
         <section className="ui panel search">
           <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mars (Jezero, Olympus…)" autoComplete="off" />
           {results.length > 0 && (
@@ -649,16 +683,105 @@ export default function App() {
         )}
       </section>
 
-      {!visor && (
+      {!visor && !cuff && (
         <p className="ui hint" aria-live="polite">
           {loadingRoute
             ? 'Computing safest & science routes across MOLA terrain…'
             : ['Click Mars to set start point A', 'Click to set destination B', 'Route A → B active · click Mars for new A'][route.length]}
+          {route.length === 0 && !loadingRoute && PRESET_EVAS.map(p => (
+            <button key={p.id} className="presetbtn" onClick={() => loadPreset(p)}>{p.label}</button>
+          ))}
           {route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
         </p>
       )}
 
-      {!visor && routeData && (
+      {!visor && cuff && (
+        <aside className="ui panel cuff" aria-label="Astronaut Forearm Wrist Cuff Display">
+          <div className="cuffhead">
+            <div>
+              <div className="cufftag">WRIST CUFF · EVA-1 · {mars ? `SOL ${Math.floor(mars.sol_date)}` : 'SOL --'}</div>
+              <div className="cufftitle">Forearm Field Checklist</div>
+            </div>
+            <span className="cuffo2">O2 8.0H</span>
+          </div>
+          {!routeData ? (
+            <div className="cuffempty">
+              <p>{loadingRoute ? 'Computing MOLA terrain route…' : 'Click Start A & Destination B on Mars, or load a preset mission:'}</p>
+              <div className="cuffpresets">
+                {PRESET_EVAS.map(p => (
+                  <button key={p.id} onClick={() => loadPreset(p)}>Load {p.label} →</button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="cuffbar">
+                <div className="proftabs">
+                  {[['science', 'Science'], ['safe', 'Safest'], ['direct', 'Direct']].map(([k, lbl]) => routeData[k] && (
+                    <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => setProfKey(k)}>{lbl}</button>
+                  ))}
+                </div>
+                <span className="badge" style={{ color: MODE_COLOR[routeData.plan.mode], borderColor: MODE_COLOR[routeData.plan.mode] }}>
+                  {routeData.plan.mode === 'walk' ? 'FOOT EVA' : 'ROVER EVA'}
+                </span>
+              </div>
+              {activeRoute && (
+                <>
+                  <div className="cuffstats">
+                    <span><b>{(activeRoute.distance_m / 1000).toFixed(1)} km</b> DIST</span>
+                    <span><b>+{activeRoute.climb_m} m</b> CLIMB</span>
+                    <span><b style={{ color: RISK_COLOR[activeRoute.risk] }}>{activeRoute.max_slope_deg}°</b> MAX</span>
+                    <span><b style={{ color: activeRoute.walkback_ok ? '#5fd38d' : '#e5484d' }}>{fmtHours(activeRoute.walk_back_h)}</b> RTB</span>
+                  </div>
+                  <ul className="manifestlist cufflist">
+                    {(activeRoute.manifest ?? []).map(m => {
+                      const useRov = routeData.plan.mode !== 'walk'
+                      const t = useRov ? m.rover_t : m.walk_t
+                      const o2 = useRov ? m.o2_rover_h : m.o2_walk_h
+                      const done = !!checkedSteps[m.code]
+                      const st = (activeRoute.stations ?? []).find(s => s.id === m.code)
+                      return (
+                        <li key={m.code} className={done ? 'done' : ''}>
+                          <div className="manrow">
+                            <input
+                              type="checkbox"
+                              checked={done}
+                              onChange={() => setCheckedSteps(p => ({ ...p, [m.code]: !p[m.code] }))}
+                              aria-label={`Mark ${m.title} complete`}
+                            />
+                            <button className="manjump" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(m.lon, m.lat, 38000))}>
+                              <b>{t}</b> <span>{m.title}</span> <em>O2 {o2}h</em>
+                            </button>
+                            {st && (
+                              <button className="cuffimgbtn" onClick={() => inspectStop({
+                                title: `Station ${st.id} · ${st.kind}`,
+                                sub: `Elev ${st.elevation_m.toLocaleString()} m · Slope ${st.slope_deg}° · Score ${st.science_score}/100`,
+                                image: st.image,
+                                pia: st.pia,
+                                text: st.task,
+                                lat: st.lat,
+                                lon: st.lon,
+                              }, 38000)}>IMG</button>
+                            )}
+                          </div>
+                          <div className="manact">{m.km} km · {m.elevation_m.toLocaleString()} m — {m.action}</div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                  <div className="cuffactions">
+                    <button onClick={exportBrief}>Brief ↓</button>
+                    <button className="cuffvisor" onClick={enterVisor}>Visor HUD →</button>
+                    <button onClick={clearRoute}>× Clear</button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+        </aside>
+      )}
+
+      {!visor && !cuff && routeData && (
         <section className="ui panel routeinfo" aria-live="polite">
           <div className="routehead">
             <button className="sectoggle" aria-expanded={routeOpen} onClick={() => setRouteOpen(o => !o)}>
@@ -863,12 +986,19 @@ export default function App() {
         </div>
       )}
 
-      <nav className="ui panel layers" aria-label="Base layer and overlays">
+      <nav className="ui panel layers" aria-label="Base layer and crew interface format">
         {Object.keys(LAYERS).map(k => (
           <button key={k} aria-pressed={layer === k} onClick={() => setLayer(k)}>{k}</button>
         ))}
         <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
           Water & ISRU
+        </button>
+        <span className="navsep" aria-hidden="true" />
+        <button aria-pressed={!visor && !cuff} onClick={() => { setCuff(false); if (visor) exitVisor() }}>
+          Console
+        </button>
+        <button className="cuffbtn" aria-pressed={!visor && cuff} onClick={() => { if (visor) exitVisor(); setCuff(c => !c) }}>
+          Wrist Cuff
         </button>
         <button className="visorbtn" aria-pressed={visor} onClick={() => visor ? exitVisor() : enterVisor()}>
           Visor HUD

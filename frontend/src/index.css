@@ -120,14 +120,38 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .prevvisor { all: unset; box-sizing: border-box; width: 100%; padding: 6px 8px; text-align: center; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dust); border: 1px solid var(--oxide); }
 .prevvisor:hover { background: var(--oxide); color: var(--basalt); }
 
-.hint { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 12px; }
+.hint { position: fixed; top: 80px; left: 50%; transform: translateX(-50%); margin: 0; padding: 8px 14px; background: var(--panel); border: 1px solid var(--line); font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); display: flex; align-items: center; gap: 10px; }
+.presetbtn { all: unset; cursor: pointer; padding: 3px 8px; border: 1px solid var(--line); font: 600 10px var(--mono); letter-spacing: .08em; color: var(--dust); }
+.presetbtn:hover { border-color: var(--oxide); color: var(--oxide); }
 .clearbtn { all: unset; cursor: pointer; color: var(--oxide); font-weight: 600; }
 .clearbtn:hover { color: var(--dust); }
+.navsep { display: inline-block; width: 1px; height: 28px; background: var(--line); vertical-align: middle; }
 .layers button { all: unset; cursor: pointer; padding: 8px 14px; font: 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); transition: color .2s, background .3s; }
 .layers button[aria-pressed="true"] { color: var(--basalt); background: var(--dust); }
 .layers button.waterbtn[aria-pressed="true"] { color: var(--basalt); background: #56b4e9; }
+.layers button.cuffbtn[aria-pressed="true"] { color: var(--basalt); background: #f2c14e; }
 .layers button.visorbtn[aria-pressed="true"] { color: var(--basalt); background: var(--oxide); }
 .layers button:hover:not([aria-pressed="true"]), .layers button:focus-visible { color: var(--dust); }
+
+.cuff { top: 80px; right: 24px; width: 330px; max-height: calc(100vh - 165px); overflow-y: auto; border: 2px solid rgba(242, 193, 78, 0.45); border-radius: 10px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65); }
+.cuffhead { display: flex; justify-content: space-between; align-items: center; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.cufftag { font: 600 10px var(--mono); letter-spacing: .14em; color: #f2c14e; }
+.cufftitle { font: 600 14px var(--sans); color: var(--dust); margin-top: 2px; }
+.cuffo2 { font: 600 11px var(--mono); color: #5fd38d; border: 1px solid #5fd38d; padding: 3px 7px; }
+.cuffempty p { font: 12px/1.45 var(--sans); color: var(--muted); margin: 10px 0; }
+.cuffpresets { display: flex; flex-direction: column; gap: 6px; }
+.cuffpresets button { all: unset; box-sizing: border-box; width: 100%; padding: 9px 10px; cursor: pointer; font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dust); border: 1px solid #f2c14e; text-align: center; }
+.cuffpresets button:hover { background: #f2c14e; color: var(--basalt); }
+.cuffbar { display: flex; justify-content: space-between; align-items: center; margin-top: 10px; }
+.cuffstats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 8px; padding: 7px 8px; background: rgba(232, 224, 214, 0.04); border: 1px solid var(--line); font: 9px var(--mono); color: var(--muted); text-align: center; }
+.cuffstats b { display: block; font-size: 11px; color: var(--dust); margin-bottom: 2px; }
+.cufflist { max-height: 250px; }
+.cuffimgbtn { all: unset; cursor: pointer; padding: 2px 6px; border: 1px solid #f2c14e; font: 600 9px var(--mono); color: #f2c14e; }
+.cuffimgbtn:hover { background: #f2c14e; color: var(--basalt); }
+.cuffactions { display: grid; grid-template-columns: 1fr 1.2fr auto; gap: 6px; margin-top: 10px; }
+.cuffactions button { all: unset; padding: 7px 10px; text-align: center; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; border: 1px solid var(--line); color: var(--dust); }
+.cuffactions button:hover { border-color: var(--dust); }
+.cuffactions .cuffvisor { background: var(--oxide); border-color: var(--oxide); color: var(--basalt); }
 
 .visorlaunch { all: unset; box-sizing: border-box; display: block; width: 100%; margin-top: 12px; padding: 9px 12px; text-align: center; cursor: pointer; font: 600 11px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--basalt); background: var(--oxide); transition: opacity .2s; }
 .visorlaunch:hover { opacity: .88; }
