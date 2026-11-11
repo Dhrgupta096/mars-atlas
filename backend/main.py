@@ -1,4 +1,5 @@
 """Run: uvicorn main:app --reload --port 8000"""
+from datetime import datetime, timezone
 from fastapi import FastAPI, Query
 from mars_time import mars_time
 from terrain import elevation, slope, risk
@@ -30,8 +31,12 @@ def health():
 
 
 @app.get("/api/time")
-def time(lon: float = Query(0.0, ge=-180, le=180), lat: float = Query(0.0, ge=-90, le=90)):
-    return mars_time(lon=lon, lat=lat)
+def time(lon: float = Query(0.0, ge=-180, le=180), lat: float = Query(0.0, ge=-90, le=90),
+         utc: str | None = Query(None)):
+    when = datetime.fromisoformat(utc.replace("Z", "+00:00")) if utc else None
+    if when and when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return mars_time(when=when, lon=lon, lat=lat)
 
 
 @app.get("/api/places")

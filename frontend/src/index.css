@@ -27,7 +27,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .panel { position: fixed; background: var(--panel); border: 1px solid var(--line); padding: 14px 16px; }
 .panel label, .sub { font: 10px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 
-.search { top: 88px; left: 24px; width: 300px; max-height: calc(100vh - 240px); overflow-y: auto; }
+.search { top: 88px; left: 24px; width: 320px; max-height: calc(100vh - 360px); overflow-y: auto; }
 .search input { display: block; width: 100%; margin-top: 8px; padding: 10px 0; background: none; border: 0; border-bottom: 1px solid var(--line); color: var(--dust); font: 15px var(--sans); outline: none; transition: border-color .3s; }
 .search input:focus { border-color: var(--oxide); }
 .search ul { list-style: none; margin: 8px 0 0; padding: 0; max-height: 280px; overflow-y: auto; }
@@ -45,11 +45,22 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .rovjumps button { all: unset; cursor: pointer; font: 10px var(--mono); color: var(--muted); letter-spacing: .06em; }
 .rovjumps button:hover { color: var(--dust); }
 
-.local { left: 24px; bottom: 32px; min-width: 300px; }
+.local { left: 24px; bottom: 32px; width: 320px; }
+.localhead { display: flex; justify-content: space-between; align-items: center; }
+.livebtn { all: unset; cursor: pointer; padding: 2px 6px; font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; border: 1px solid var(--oxide); color: var(--oxide); }
+.livebtn[aria-pressed="true"] { border-color: #5fd38d; color: #5fd38d; }
 .coord { font: 11px var(--mono); color: var(--muted); letter-spacing: .08em; }
-.big { font: 300 44px/1.1 var(--mono); font-variant-numeric: tabular-nums; margin: 6px 0 2px; }
-.row { display: flex; gap: 18px; margin-top: 12px; font: 11px var(--mono); color: var(--muted); }
+.big { font: 300 40px/1.1 var(--mono); font-variant-numeric: tabular-nums; margin: 6px 0 2px; }
+.row { display: flex; justify-content: space-between; margin-top: 10px; font: 11px var(--mono); color: var(--muted); }
 .row b { color: var(--dust); font-weight: 500; }
+.seasonrow { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); font: 10px var(--mono); color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.seasonrow em { font-style: normal; font-weight: 600; }
+.evadate { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.dtcontrols { display: flex; gap: 4px; margin-top: 5px; align-items: center; }
+.dtinput { flex: 1; min-width: 0; background: rgba(232, 224, 214, 0.04); border: 1px solid var(--line); color: var(--dust); font: 10px var(--mono); padding: 4px 5px; color-scheme: dark; outline: none; }
+.dtinput:focus { border-color: var(--oxide); }
+.dtcontrols button { all: unset; cursor: pointer; padding: 4px 6px; border: 1px solid var(--line); font: 500 10px var(--mono); color: var(--muted); transition: color .2s, border-color .2s; }
+.dtcontrols button:hover { color: var(--dust); border-color: var(--oxide); }
 
 .layers { right: 24px; bottom: 32px; display: flex; padding: 4px; gap: 4px; }
 

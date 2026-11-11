@@ -22,5 +22,10 @@ assert mars_time(utc(2026, 10, 2))["mars_year"] == 39
 # Local time shifts 1 h per 15° east
 a, b = mars_time(utc(2000, 1, 6), lon=0), mars_time(utc(2000, 1, 6), lon=15)
 assert round((b["ltst_hours"] - a["ltst_hours"]) % 24, 3) == 1.0
+assert a["dust_season"] is True and 11.5 <= a["daylight_hours"] <= 12.5
+
+# Future date (e.g. 2033 human landing mission window): Ls ~105° -> clear northern summer (not dust season)
+f = mars_time(utc(2033, 5, 15, 12, 0), lon=77.58, lat=18.38)
+assert f["mars_year"] == 42 and f["dust_season"] is False and f["daylight_hours"] > 12.0
 
 print("all mars_time checks passed")

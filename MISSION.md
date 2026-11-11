@@ -37,3 +37,9 @@ https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide
 - [x] 12/14: water ice & hydrated mineral resource layer (SWIM, SHARAD, MONS, CRISM + ISRU assessment)
 - [x] 13/14: walk-back safety limit ring (6 km foot EVA ring, 12 km Apollo rover walk-back ring, 4h B→A emergency check)
 - [x] 14/14: helmet HUD visor mode (first-person 3D view, compass heading tape, PLSS O2 reserve & walk-back telemetry, waypoint stepper)
+
+## Today's Tasks (Phase 2 — Operational Polish & Judge-Winning Extras)
+- [x] 15/18: future EVA date & daylight window planner (pick any future UTC date/time, compute future Sol/Ls/sunrise/sunset, dust-storm season warning, + LIVE reset)
+- [ ] 16/18: rover surface photos & station field previews (real NASA Perseverance/Curiosity ground imagery & geological context at waypoints and stations S1–S3)
+- [ ] 17/18: timed Apollo EVA cuff checklist & mission manifest (step-by-step timeline from Egress A → S1..S3 → B → Ingress A, 20-min science stops, O2 budget, exportable brief)
+- [ ] 18/18: 3-format crew interface switcher (Habitat Console · Wrist Tablet Cuff · Helmet Visor HUD)

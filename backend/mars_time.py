@@ -68,6 +68,7 @@ def mars_time(when: datetime | None = None, lon: float = 0.0, lat: float = 0.0) 
     is_day = polar == "polar day" or (h0 is not None and abs(ltst - 12) < h0)
 
     season = ["spring", "summer", "autumn", "winter"][int(ls // 90)]
+    day_h = 24.0 if polar == "polar day" else 0.0 if polar == "polar night" else round(2 * h0, 2)
     return {
         "utc": when.astimezone(timezone.utc).isoformat(),
         "mars_year": my,
@@ -75,11 +76,13 @@ def mars_time(when: datetime | None = None, lon: float = 0.0, lat: float = 0.0) 
         "ls": round(ls, 3),
         "season_north": season,
         "season_south": ["autumn", "winter", "spring", "summer"][int(ls // 90)],
+        "dust_season": bool(180.0 <= ls <= 330.0),  # Mars perihelion global dust storm window (Ls 180°–330°)
         "mtc": _hms(mtc),
         "lmst": _hms(lmst),
         "ltst": _hms(ltst),
         "ltst_hours": round(ltst, 4),
         "is_day": is_day,
+        "daylight_hours": day_h,
         "sunrise_ltst": _hms(12 - h0) if h0 is not None else None,
         "sunset_ltst": _hms(12 + h0) if h0 is not None else None,
         "polar": polar,

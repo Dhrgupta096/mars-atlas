@@ -26,6 +26,8 @@ function trekLayer({ id, maxLevel }) {
 
 const fmtDeg = (v, pos, neg) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? pos : neg}`
 const fmtHours = h => h < 1 ? `${Math.round(h * 60)} min` : `${h.toFixed(1)} h`
+const toLocalIso = d => new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16)
+const SOL_MS = 88775244 // 1 Mars solar day (sol) = 24h 39m 35.244s in milliseconds
 const MODE_LABEL = { walk: '8h EVA · Walk OK', rover: '8h EVA · Rover Needed', expedition: 'Over 8h · Multi-Sol', none: 'Blocked (>20°)' }
 const MODE_COLOR = { walk: '#5fd38d', rover: '#f2c14e', expedition: '#e2572b', none: '#e5484d' }
 const ROUTE_COLOR = { direct: '#e8e0d6', safe: '#5fd38d', science: '#f2c14e' }
@@ -68,6 +70,7 @@ export default function App() {
   const [center, setCenter] = useState({ lat: 0, lon: -60 })
   const [mars, setMars] = useState(null)
   const [now, setNow] = useState(() => new Date())
+  const [simMs, setSimMs] = useState(null) // null = LIVE real-time; number = planned EVA epoch ms
   const [route, setRoute] = useState([]) // [{lat, lon}] — A, then B
   const [routeData, setRouteData] = useState(null) // {direct, safe, science, plan} from /api/route
   const [profKey, setProfKey] = useState('safe')
@@ -346,18 +349,23 @@ export default function App() {
     }
   }, [places])
 
-  // Live clocks: Earth ticks locally, Mars comes from the Python backend at the view centre
-  // ponytail: polls once a second; switch to a websocket if we add many live feeds
+  // Live or simulated clocks: Earth ticks locally (or holds planned EVA date), Mars comes from Python backend
+  // ponytail: polls once a second when LIVE; switch to a websocket if we add many live feeds
   useEffect(() => {
+    const base = `/api/time?lat=${center.lat.toFixed(4)}&lon=${center.lon.toFixed(4)}`
+    if (simMs !== null) {
+      getJson(`${base}&utc=${encodeURIComponent(new Date(simMs).toISOString())}`)
+        .then(setMars).catch(() => setMars(null))
+      return
+    }
     const tick = () => {
       setNow(new Date())
-      getJson(`/api/time?lat=${center.lat.toFixed(4)}&lon=${center.lon.toFixed(4)}`)
-        .then(setMars).catch(() => setMars(null))
+      getJson(base).then(setMars).catch(() => setMars(null))
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [center])
+  }, [center, simMs])
 
   // UI entrance
   useEffect(() => {
@@ -471,6 +479,8 @@ export default function App() {
     setHoverIdx(null)
     setHoverMarker(viewerRef, false)
   }
+  const activeDate = simMs !== null ? new Date(simMs) : now
+  const shiftSim = deltaMs => setSimMs( prev => (prev ?? now.getTime()) + deltaMs)
 
   return (
     <>
@@ -479,7 +489,10 @@ export default function App() {
       <header className="ui bar">
         <button className="mark" onClick={goHome} aria-label="Back to full Mars view">MARS<span>/</span>ATLAS</button>
         <dl className="clocks">
-          <div><dt>Earth · {EARTH_TZ}</dt><dd>{now.toLocaleTimeString([], { hour12: false })}</dd></div>
+          <div>
+            <dt>{simMs !== null ? 'Planned EVA · Earth' : `Earth · ${EARTH_TZ}`}</dt>
+            <dd>{simMs !== null ? activeDate.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : activeDate.toLocaleTimeString([], { hour12: false })}</dd>
+          </div>
           <div><dt>Mars · MTC</dt><dd>{mars?.mtc ?? '--:--:--'}</dd></div>
           <div><dt>Mars Year</dt><dd>{mars?.mars_year ?? '--'}</dd></div>
           <div><dt>Sol</dt><dd>{mars ? Math.floor(mars.sol_date) : '--'}</dd></div>
@@ -524,13 +537,46 @@ export default function App() {
       )}
 
       <section className="ui panel local" aria-live="polite">
-        <div className="coord">{fmtDeg(center.lat, 'N', 'S')} &nbsp; {fmtDeg(center.lon, 'E', 'W')}</div>
+        <div className="localhead">
+          <div className="coord">{fmtDeg(center.lat, 'N', 'S')} &nbsp; {fmtDeg(center.lon, 'E', 'W')}</div>
+          <button className="livebtn" aria-pressed={simMs === null} onClick={() => setSimMs(null)}>
+            {simMs === null ? '● LIVE' : '↺ RESET LIVE'}
+          </button>
+        </div>
         <div className="big">{mars?.ltst ?? '--:--:--'}</div>
-        <div className="sub">Local true solar time · {mars ? (mars.is_day ? 'Daylight' : 'Night') : '—'}</div>
+        <div className="sub">
+          Local true solar time ·{' '}
+          <span style={{ color: mars?.is_day ? '#5fd38d' : '#f2c14e' }}>
+            {mars ? (mars.is_day ? 'DAYLIGHT · EVA GO' : 'NIGHT · WAIT FOR SUNRISE') : '—'}
+          </span>
+        </div>
         <div className="row">
           <span>Sunrise <b>{mars?.sunrise_ltst ?? mars?.polar ?? '--'}</b></span>
           <span>Sunset <b>{mars?.sunset_ltst ?? mars?.polar ?? '--'}</b></span>
-          <span>{mars ? `${mars.season_north[0].toUpperCase()}${mars.season_north.slice(1)} (N)` : ''}</span>
+          <span>Day <b>{mars ? `${mars.daylight_hours}h` : '--'}</b></span>
+        </div>
+        {mars && (
+          <div className="seasonrow">
+            <span>{mars.season_north[0].toUpperCase()}{mars.season_north.slice(1)} (N) · Ls {mars.ls.toFixed(1)}°</span>
+            <em style={{ color: mars.dust_season ? '#f2c14e' : '#5fd38d' }}>
+              {mars.dust_season ? 'Dust Storm Season' : 'Clear Season'}
+            </em>
+          </div>
+        )}
+        <div className="evadate">
+          <label htmlFor="evadt">Plan Future Walk Date ({EARTH_TZ})</label>
+          <div className="dtcontrols">
+            <input
+              id="evadt"
+              type="datetime-local"
+              className="dtinput"
+              value={toLocalIso(activeDate)}
+              onChange={e => e.target.value && setSimMs(new Date(e.target.value).getTime())}
+            />
+            <button onClick={() => shiftSim(-7200e3)} title="Rewind 2 hours">-2h</button>
+            <button onClick={() => shiftSim(7200e3)} title="Advance 2 hours">+2h</button>
+            <button onClick={() => shiftSim(SOL_MS)} title="Advance 1 Martian Sol (24h 39m 35s)">+1 Sol</button>
+          </div>
         </div>
       </section>
 
