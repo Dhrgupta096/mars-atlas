@@ -149,6 +149,42 @@ def _manifest(lats, lons, heights, seg, grade, walk_back: float, rover_back: flo
     return steps
 
 
+def _comm_and_radiation(heights, seg, d: float, walk_rt: float, rover_rt: float) -> tuple[dict, dict]:
+    """VHF Comm-Link Line-of-Sight (10 m Hab mast at A to 1.8 m suit antenna) + MSL RAD GCR radiation telemetry."""
+    # Geometric Mars horizon for 10 m Hab mast + 1.8 m suit helmet: sqrt(2*MARS_R*10) + sqrt(2*MARS_R*1.8) ≈ 11.73 km
+    flat_los_km = (np.sqrt(2 * MARS_R * 10.0) + np.sqrt(2 * MARS_R * 1.8)) / 1000.0
+    cum_m = np.concatenate(([0.0], np.cumsum(seg)))
+    los_km = flat_los_km
+    if d > 0 and len(heights) > 2:
+        h_a = float(heights[0]) + 10.0
+        h_b = float(heights[-1]) + 1.8
+        # Curvature drop + topographic ridge check along profile
+        frac = cum_m[1:-1] / d
+        ray_h = h_a + frac * (h_b - h_a) - (cum_m[1:-1] * (d - cum_m[1:-1])) / (2 * MARS_R)
+        blocked = np.where(heights[1:-1] > ray_h)[0]
+        if len(blocked) > 0:
+            los_km = min(flat_los_km, float(cum_m[blocked[0] + 1]) / 1000.0)
+    direct_ok = bool((d / 1000.0) <= los_km)
+    comm = {
+        "los_km": round(los_km, 2),
+        "direct_ok": direct_ok,
+        "relay": "Direct VHF to Hab Mast A" if direct_ok else "MRO / TGO UHF Orbital Relay Required",
+        "pass_window": "Continuous VHF Line-of-Sight" if direct_ok else "MRO Pass every 112m · TGO Pass every 120m (14m window)",
+    }
+    # MSL Curiosity RAD baseline: ~21.0 uSv/h at Gale (-4500 m), scaling with Mars CO2 scale height (11.1 km)
+    mean_z = float(heights.mean())
+    rate_usv_h = 21.0 * float(np.exp(np.clip((mean_z + 4500.0) / 11100.0, -0.5, 1.8)))
+    walk_msv = (rate_usv_h * (walk_rt + 1.0)) / 1000.0
+    rover_msv = (rate_usv_h * 0.65 * (rover_rt + 1.0)) / 1000.0  # 35% pressurized rover hull shielding
+    radiation = {
+        "rate_usv_h": round(rate_usv_h, 1),
+        "walk_msv": round(walk_msv, 3),
+        "rover_msv": round(rover_msv, 3),
+        "status": "NOMINAL GCR" if rate_usv_h < 30.0 else "ELEVATED HIGH-ALTITUDE GCR",
+    }
+    return comm, radiation
+
+
 def _analyse(lats, lons, d) -> dict:
     """Shared stats for any path: climb, descent, steepest point, risk, travel times, science score & stations."""
     heights = np.array([elevation(la, lo) for la, lo in zip(lats, lons)])
@@ -162,6 +198,9 @@ def _analyse(lats, lons, d) -> dict:
     exp = _sci_exposure(slopes)
     sci_score = round(float((0.4 * exp.mean() + 0.6 * np.percentile(exp, 80)) * 100))
     stations = _stations(lats, lons, heights, slopes)
+    walk_rt = walk_out + walk_back
+    rover_rt = rover_out + rover_back
+    comm, radiation = _comm_and_radiation(heights, seg, float(d), walk_rt, rover_rt)
     return {
         "distance_m": round(d),
         "climb_m": int(dh[dh > 0].sum()),
@@ -172,12 +211,14 @@ def _analyse(lats, lons, d) -> dict:
         "walk_h": round(walk_out, 2),
         "walk_back_h": round(walk_back, 2),
         "walkback_ok": bool(walk_back <= WALKBACK_HOURS),
-        "walk_round_trip_h": round(walk_out + walk_back, 2),
+        "walk_round_trip_h": round(walk_rt, 2),
         "rover_h": round(rover_out, 2),
-        "rover_round_trip_h": round(rover_out + rover_back, 2),
+        "rover_round_trip_h": round(rover_rt, 2),
         "science_score": sci_score,
         "stations": stations,
         "manifest": _manifest(lats, lons, heights, seg, grade, walk_back, rover_back, stations),
+        "comm": comm,
+        "radiation": radiation,
         "path": [[round(float(la), 5), round(float(lo), 5)] for la, lo in zip(lats, lons)],
         "profile_m": heights.tolist(),
     }

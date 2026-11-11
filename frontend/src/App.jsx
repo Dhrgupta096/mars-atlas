@@ -6,11 +6,11 @@ const MARS = Cesium.Ellipsoid.MARS
 Cesium.Ellipsoid.default = MARS
 
 const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ/'
-const USGS_WMS = 'https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/mars_simp_cyl.map'
+const OPM_CDN = 'https://cartocdn-gusc.global.ssl.fastly.net/opmbuilder/api/v1/map/named/opm-mars-basemap-v0-2/all/{z}/{x}/{y}.png'
 const LAYERS = {
-  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'THEMIS' },
-  'THEMIS 100m': { wms: 'MOLA_THEMIS_blend', maxLevel: 11, detail: 'THEMIS' },
-  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade' },
+  'Atlas HD': { opm: true, maxLevel: 13, tint: 'Mars_Viking_MDIM21_ClrMosaic_global_232m' },
+  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detailOpm: true },
+  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detailOpm: true },
 }
 const KIND_COLOR = { rover: '#7fd1c7', lander: '#7fd1c7', ice: '#f2f0ea', volcano: '#e2572b', crater: '#d9b26f', canyon: '#d9b26f', basin: '#d9b26f', plain: '#d9b26f' }
 const EARTH_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -26,18 +26,56 @@ function trekLayer({ id, maxLevel }) {
   })
 }
 
-function usgsWmsLayer(layerName, maxLevel = 12, minLevel = 0) {
-  return new Cesium.WebMapServiceImageryProvider({
-    url: USGS_WMS,
-    layers: layerName,
-    parameters: { format: 'image/jpeg', version: '1.1.1', srs: 'EPSG:4326' },
-    tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
+function opmCdnLayer(maxLevel = 13, minLevel = 0) {
+  return new Cesium.UrlTemplateImageryProvider({
+    url: OPM_CDN,
+    tilingScheme: new Cesium.WebMercatorTilingScheme({ ellipsoid: MARS }),
     minimumLevel: minLevel,
     maximumLevel: maxLevel,
-    tileWidth: 512,
-    tileHeight: 512,
-    credit: 'NASA / JPL / ASU · USGS Astrogeology (THEMIS 100m)',
+    credit: 'OpenPlanetaryMap · NASA MOLA / Viking / CTX (Fastly CDN)',
   })
+}
+
+let audioCtx = null
+function playQuindar(enabled, speechText = '') {
+  if (!enabled || typeof window === 'undefined') return
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (Ctx) {
+      audioCtx = audioCtx || new Ctx()
+      const osc = audioCtx.createOscillator()
+      const gain = audioCtx.createGain()
+      osc.type = 'sine'
+      osc.frequency.setValueAtTime(2525, audioCtx.currentTime) // NASA Apollo Quindar intro tone (2,525 Hz)
+      gain.gain.setValueAtTime(0.06, audioCtx.currentTime)
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.16)
+      osc.connect(gain)
+      gain.connect(audioCtx.destination)
+      osc.start()
+      osc.stop(audioCtx.currentTime + 0.16)
+    }
+    if (speechText && 'speechSynthesis' in window) {
+      window.speechSynthesis.cancel()
+      const u = new SpeechSynthesisUtterance(speechText)
+      u.rate = 1.06
+      u.pitch = 0.94
+      u.volume = 0.75
+      window.speechSynthesis.speak(u)
+    }
+  } catch {
+    // Ignore browser autoplay restrictions
+  }
+}
+
+function parseHashRoute() {
+  if (typeof window === 'undefined' || !window.location.hash) return null
+  const params = new URLSearchParams(window.location.hash.slice(1))
+  const aStr = params.get('a'), bStr = params.get('b'), suit = params.get('suit')
+  if (!aStr || !bStr) return null
+  const [lat1, lon1] = aStr.split(',').map(Number)
+  const [lat2, lon2] = bStr.split(',').map(Number)
+  if ([lat1, lon1, lat2, lon2].some(Number.isNaN)) return null
+  return { a: { lat: lat1, lon: lon1 }, b: { lat: lat2, lon: lon2 }, suit }
 }
 
 const fmtDeg = (v, pos, neg) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? pos : neg}`
@@ -139,10 +177,19 @@ function syncSunlight(ref, enabled, mars, center) {
   scene.globe.dynamicAtmosphereLighting = false
   const ents = v.sunLayer?.entities
   if (!ents) return
-  ents.removeAll()
-  if (!enabled || !mars) return
+  if (!enabled || !mars) {
+    if (v._sunKey !== 'off') {
+      v._sunKey = 'off'
+      ents.removeAll()
+    }
+    return
+  }
   const subLat = mars.solar_declination ?? 0
   const subLon = ((center.lon + (12 - (mars.ltst_hours ?? 12)) * 15 + 540) % 360) - 180
+  const sunKey = `${Math.round(subLat * 4)}:${Math.round(subLon * 4)}:${mars.dust_season ? 1 : 0}`
+  if (v._sunKey === sunKey) return
+  v._sunKey = sunKey
+  ents.removeAll()
   const sunPos = Cesium.Cartesian3.fromDegrees(subLon, subLat, 1e7)
   const dir = Cesium.Cartesian3.negate(Cesium.Cartesian3.normalize(sunPos, new Cesium.Cartesian3()), new Cesium.Cartesian3())
   scene.light = new Cesium.DirectionalLight({
@@ -171,14 +218,18 @@ function syncSunlight(ref, enabled, mars, center) {
 export default function App() {
   const globeRef = useRef(null)
   const viewerRef = useRef(null)
-  const [layer, setLayer] = useState('Imagery')
+  const audioRef = useRef(false)
+  const [layer, setLayer] = useState('Atlas HD')
   const [places, setPlaces] = useState([])
   const [query, setQuery] = useState('')
   const [center, setCenter] = useState({ lat: 0, lon: -60 })
   const [mars, setMars] = useState(null)
   const [now, setNow] = useState(() => new Date())
   const [simMs, setSimMs] = useState(null) // null = LIVE real-time; number = planned EVA epoch ms
-  const [route, setRoute] = useState([]) // [{lat, lon}] — A, then B
+  const [route, setRoute] = useState(() => {
+    const h = parseHashRoute()
+    return h ? [h.a, h.b] : []
+  }) // [{lat, lon}] — A, then B
   const [routeData, setRouteData] = useState(null) // {direct, safe, science, plan} from /api/route
   const [profKey, setProfKey] = useState('safe')
   const [hoverIdx, setHoverIdx] = useState(null)
@@ -186,7 +237,7 @@ export default function App() {
   const [showRovers, setShowRovers] = useState(true)
   const [waterSites, setWaterSites] = useState([])
   const [showWater, setShowWater] = useState(true)
-  const [loadingRoute, setLoadingRoute] = useState(false)
+  const [loadingRoute, setLoadingRoute] = useState(() => !!parseHashRoute())
   const [visor, setVisor] = useState(false)
   const [cuff, setCuff] = useState(false)
   const [visorIdx, setVisorIdx] = useState(0)
@@ -196,13 +247,18 @@ export default function App() {
   const [dateOpen, setDateOpen] = useState(false)
   const [routeOpen, setRouteOpen] = useState(true)
   const [routeTab, setRouteTab] = useState('overview') // 'overview' | 'terrain' | 'checklist'
-  const [evaSpec, setEvaSpec] = useState('plss8')
+  const [evaSpec, setEvaSpec] = useState(() => {
+    const h = parseHashRoute()
+    return h?.suit && EVA_SPECS[h.suit] ? h.suit : 'plss8'
+  })
   const [preview, setPreview] = useState(null) // {title, sub, image, pia, text, lat, lon}
   const [checkedSteps, setCheckedSteps] = useState({})
-  const [intro, setIntro] = useState(true)
+  const [intro, setIntro] = useState(() => !parseHashRoute())
   const [sunlight, setSunlight] = useState(true)
   const [showHazards, setShowHazards] = useState(true)
   const [replaying, setReplaying] = useState(false)
+  const [audioOn, setAudioOn] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   // Globe
   useEffect(() => {
@@ -213,12 +269,15 @@ export default function App() {
       skyAtmosphere: false,
     })
     const { scene, camera } = viewer
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2)
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5)
     scene.postProcessStages.fxaa.enabled = true
     scene.moon = undefined
     scene.globe.showGroundAtmosphere = false
     scene.globe.depthTestAgainstTerrain = true
-    scene.globe.maximumScreenSpaceError = 1.15
+    scene.globe.tileCacheSize = 1000
+    scene.globe.preloadAncestors = true
+    scene.globe.preloadSiblings = true
+    scene.globe.maximumScreenSpaceError = 1.35
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#2a1a12')
     scene.screenSpaceCameraController.minimumZoomDistance = 2000
     viewerRef.current = viewer
@@ -234,7 +293,10 @@ export default function App() {
     viewer.dataSources.add(viewer.sunLayer)
 
     camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-135, 18, 5.2e7) })
-    glide(camera, HOME)
+    const initialHash = parseHashRoute()
+    if (!initialHash) {
+      glide(camera, HOME)
+    }
     const introTimer = setTimeout(() => setIntro(false), 4200)
 
     const onMove = () => {
@@ -258,6 +320,10 @@ export default function App() {
     const pins = [makePin('A · START'), makePin('B · DESTINATION')]
     viewer.pins = pins
     viewer.hoverPin = makePin('')
+    if (initialHash) {
+      setPinAB(viewerRef, initialHash.a, initialHash.b)
+      glide(camera, Cesium.Cartesian3.fromDegrees((initialHash.a.lon + initialHash.b.lon) / 2, (initialHash.a.lat + initialHash.b.lat) / 2, 52000))
+    }
     let downPos = null
     const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas)
     handler.setInputAction(e => { downPos = Cesium.Cartesian2.clone(e.position) }, Cesium.ScreenSpaceEventType.LEFT_DOWN)
@@ -274,6 +340,7 @@ export default function App() {
       setRoute(prev => {
         const next = prev.length === 2 ? [{ lat, lon }] : [...prev, { lat, lon }]
         setLoadingRoute(next.length === 2)
+        playQuindar(audioRef.current, next.length === 1 ? 'Start pin Alpha locked' : 'Destination Bravo locked, computing MOLA route')
         if (prev.length === 2) pins[1].show = false
         const pin = pins[next.length - 1]
         const where = `${pin.letter}\n${fmtDeg(lat, 'N', 'S')}  ${fmtDeg(lon, 'E', 'W')}`
@@ -303,11 +370,12 @@ export default function App() {
       if (stale) return
       setLoadingRoute(false)
       setRouteData(data)
+      playQuindar(audioRef.current, `Route locked. Safest path ${((data.safe ?? data.direct).distance_m / 1000).toFixed(1)} kilometers.`)
     }).catch(() => { if (!stale) setLoadingRoute(false) })
     return () => { stale = true }
   }, [route])
 
-  // Render walk-back rings, 3D route lines, 3D vertical station beacons, and MOLA slope hazard zones
+  // Render walk-back rings, VHF comm horizon, 3D route lines, 3D terrain curtain wall, 3D vertical station beacons, and MOLA slope hazard zones
   useEffect(() => {
     const ents = viewerRef.current.routeLayer.entities
     ents.removeAll()
@@ -316,7 +384,12 @@ export default function App() {
     const [a] = route
     const degPerM = 1 / 59158 // 1° latitude on Mars ≈ 59.16 km
     const cosLat = Math.max(Math.cos(a.lat * Math.PI / 180), 0.05)
-    for (const [radM, hex, tag] of [[6000, '#5fd38d', '6 KM FOOT EVA LIMIT'], [12000, '#f2c14e', '12 KM ROVER WALK-BACK LIMIT']]) {
+    const act = routeData && (routeData[profKey] ?? routeData.direct)
+    const rings = [[6000, '#5fd38d', '6 KM FOOT EVA LIMIT'], [12000, '#f2c14e', '12 KM ROVER WALK-BACK LIMIT']]
+    if (act?.comm?.los_km) {
+      rings.push([act.comm.los_km * 1000, '#56b4e9', `HAB VHF LOS HORIZON (${act.comm.los_km} KM)`])
+    }
+    for (const [radM, hex, tag] of rings) {
       const col = Cesium.Color.fromCssColorString(hex)
       const ring = Array.from({ length: 65 }, (_, i) => {
         const ang = (i / 64) * Math.PI * 2
@@ -341,6 +414,21 @@ export default function App() {
     }
     if (!routeData) return
     const { direct, safe, science, hazards } = routeData
+    if (act && act.path.length > 1) {
+      const pMin = Math.min(...act.profile_m)
+      const pSpan = Math.max(Math.max(...act.profile_m) - pMin, 1)
+      const wCol = Cesium.Color.fromCssColorString(ROUTE_COLOR[profKey])
+      ents.add({
+        wall: {
+          positions: Cesium.Cartesian3.fromDegreesArray(act.path.flatMap(([la, lo]) => [lo, la])),
+          minimumHeights: act.profile_m.map(() => 400),
+          maximumHeights: act.profile_m.map(h => 480 + ((h - pMin) / pSpan) * 2100),
+          material: wCol.withAlpha(0.22),
+          outline: true,
+          outlineColor: wCol.withAlpha(0.65),
+        },
+      })
+    }
     ents.add({
       polyline: {
         positions: surfLine(direct.path), width: profKey === 'direct' ? 4 : 2, arcType: Cesium.ArcType.GEODESIC,
@@ -429,20 +517,32 @@ export default function App() {
     }
   }, [route, routeData, profKey, showHazards])
 
-  // Base layer + high-resolution 100m THEMIS / HRSC detail overlay on zoom
+  // Fastly CDN OpenPlanetaryMap XYZ pyramid (zoom 0–13) + NASA Mars Trek WMTS layers
   useEffect(() => {
     const layers = viewerRef.current.imageryLayers
     layers.removeAll()
     const cfg = LAYERS[layer]
-    const base = layers.addImageryProvider(cfg.wms ? usgsWmsLayer(cfg.wms, cfg.maxLevel) : trekLayer(cfg))
+    if (cfg.opm) {
+      const base = layers.addImageryProvider(opmCdnLayer(cfg.maxLevel, 0))
+      base.contrast = 1.18
+      base.brightness = 1.02
+      base.saturation = 1.15
+      if (cfg.tint) {
+        const tint = layers.addImageryProvider(trekLayer({ id: cfg.tint, maxLevel: 7 }))
+        tint.alpha = 0.28
+        tint.saturation = 1.35
+      }
+      return
+    }
+    const base = layers.addImageryProvider(trekLayer(cfg))
     base.contrast = 1.16
     base.brightness = 1.03
     base.saturation = 1.12
     base.gamma = 0.96
-    if (cfg.detail) {
-      const hiRes = layers.addImageryProvider(usgsWmsLayer(cfg.detail, 12, 4))
-      hiRes.alpha = cfg.wms ? 0.55 : 0.42
-      hiRes.contrast = 1.35
+    if (cfg.detailOpm) {
+      const hiRes = layers.addImageryProvider(opmCdnLayer(13, 4))
+      hiRes.alpha = 0.44
+      hiRes.contrast = 1.28
     }
   }, [layer])
 
@@ -562,6 +662,22 @@ export default function App() {
     return () => ctx.revert()
   }, [])
 
+  const toggleAudio = () => {
+    const next = !audioOn
+    audioRef.current = next
+    setAudioOn(next)
+    if (next) playQuindar(true, 'Mission Control Quindar audio online')
+  }
+  const copyLink = () => {
+    if (route.length < 2) return
+    const [a, b] = route
+    const hash = `#a=${a.lat.toFixed(4)},${a.lon.toFixed(4)}&b=${b.lat.toFixed(4)},${b.lon.toFixed(4)}&suit=${evaSpec}`
+    window.history.replaceState(null, '', hash)
+    navigator.clipboard?.writeText(window.location.href).catch(() => {})
+    setCopied(true)
+    playQuindar(audioRef.current, 'Mission link copied to clipboard')
+    setTimeout(() => setCopied(false), 2000)
+  }
   const clearRoute = () => {
     setRoute([])
     setRouteData(null)
@@ -571,6 +687,7 @@ export default function App() {
     setVisorIdx(0)
     setPreview(null)
     setCheckedSteps({})
+    if (window.location.hash) window.history.replaceState(null, '', window.location.pathname)
     hideAllPins(viewerRef)
   }
   const loadPreset = p => {
@@ -580,6 +697,7 @@ export default function App() {
     setHoverIdx(null)
     setLoadingRoute(true)
     setCheckedSteps({})
+    playQuindar(audioRef.current, `Loading ${p.label}`)
     setPinAB(viewerRef, p.a, p.b)
     setRoute([p.a, p.b])
     glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees((p.a.lon + p.b.lon) / 2, (p.a.lat + p.b.lat) / 2, 52000))
@@ -587,6 +705,8 @@ export default function App() {
   const exportBrief = () => {
     if (!routeData || !activeRoute) return
     const useRover = planMode !== 'walk'
+    const rad = activeRoute.radiation
+    const comm = activeRoute.comm
     const lines = [
       'MARS ATLAS · APOLLO-STYLE EVA MISSION MANIFEST',
       '==============================================',
@@ -597,6 +717,8 @@ export default function App() {
       `Distance    : ${(activeRoute.distance_m / 1000).toFixed(2)} km one-way · Climb +${activeRoute.climb_m} m / Descent -${activeRoute.descent_m} m`,
       `Max Slope   : ${activeRoute.max_slope_deg}° (${activeRoute.risk.toUpperCase()}) · Science Score ${activeRoute.science_score}/100`,
       `Walk-Back   : ${fmtHours(activeRoute.walk_back_h)} B->A emergency walk-back (${spec.buddy || activeRoute.walk_back_h <= spec.wb ? 'SAFE' : 'EXCEEDS LIMIT'})`,
+      comm ? `Comm Link   : ${comm.relay} (Hab Mast VHF Horizon ${comm.los_km} km · ${comm.pass_window})` : '',
+      rad ? `RAD Telemetry: ${(useRover ? rad.rover_msv : rad.walk_msv).toFixed(3)} mSv EVA dose (${rad.rate_usv_h} uSv/h · ${rad.status})` : '',
       routeData.water ? `ISRU Water  : ${routeData.water.status} — ${routeData.water.detail} (${routeData.water.source})` : '',
       `Rationale   : ${whyText}`,
       '',
@@ -611,6 +733,7 @@ export default function App() {
   }
   const inspectStop = (item, height = 22000) => {
     setPreview(item)
+    playQuindar(audioRef.current, item.title)
     glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(item.lon, item.lat, height))
   }
   const flyTo = p => {
@@ -1067,6 +1190,8 @@ export default function App() {
                           const ok = spec.buddy || r.walk_back_h <= spec.wb
                           return <span style={{ color: ok ? '#5fd38d' : '#e5484d' }}>{spec.buddy ? 'Buddy Rover' : `${fmtHours(r.walk_back_h)} · ${ok ? 'OK' : `>${spec.wb}H`}`}</span>
                         }],
+                        ['Comm Link', r => r.comm ? <span style={{ color: r.comm.direct_ok ? '#5fd38d' : '#56b4e9' }}>{r.comm.direct_ok ? `VHF LOS (${r.comm.los_km}km)` : 'MRO/TGO Relay'}</span> : '—'],
+                        ['RAD Dose', r => r.radiation ? `${(planMode === 'walk' ? r.radiation.walk_msv : r.radiation.rover_msv).toFixed(2)} mSv (${r.radiation.rate_usv_h} μSv/h)` : '—'],
                       ].map(([name, fmt]) => (
                         <tr key={name}>
                           <th>{name}</th>
@@ -1186,7 +1311,10 @@ export default function App() {
               )}
               <div className="routeactions">
                 <button className="replaybtn" aria-pressed={replaying} onClick={() => setReplaying(r => !r)}>
-                  {replaying ? '■ Stop Flyover' : `▶ Fly ${profKey.toUpperCase()} Route`}
+                  {replaying ? '■ Stop' : `▶ Fly ${profKey.toUpperCase()}`}
+                </button>
+                <button className="sharebtn" onClick={copyLink} title="Copy shareable mission permalink">
+                  {copied ? 'Copied ✓' : 'Copy Link ⎘'}
                 </button>
                 <button className="visorlaunch" onClick={enterVisor}>
                   Visor HUD →
@@ -1222,6 +1350,18 @@ export default function App() {
               <span>WALK-BACK A</span>
               <b style={{ color: vWalkBackH <= spec.wb ? '#5fd38d' : '#e5484d' }}>{fmtHours(vWalkBackH)} · {spec.buddy ? 'BUDDY ROVER' : vWalkBackH <= spec.wb ? 'SAFE' : `>${spec.wb}H LIMIT`}</b>
             </div>
+            {activeRoute?.comm && (
+              <div className="suit-row">
+                <span>COMM LINK</span>
+                <b style={{ color: activeRoute.comm.direct_ok ? '#5fd38d' : '#56b4e9' }}>{activeRoute.comm.direct_ok ? 'VHF HAB LOS' : 'UHF RELAY'}</b>
+              </div>
+            )}
+            {activeRoute?.radiation && (
+              <div className="suit-row">
+                <span>GCR RAD DOSE</span>
+                <b>{((planMode === 'walk' ? activeRoute.radiation.walk_msv : activeRoute.radiation.rover_msv) * Math.max(vFrac, 0.08)).toFixed(3)} mSv ({activeRoute.radiation.rate_usv_h} μSv/h)</b>
+              </div>
+            )}
             {vElev !== null && <div className="suit-row"><span>ELEVATION</span><b>{vElev.toLocaleString()} m</b></div>}
             {activeRoute && <div className="suit-row"><span>DIST TO B</span><b>{vRemKm} km</b></div>}
           </aside>
@@ -1259,6 +1399,9 @@ export default function App() {
             Hazards
           </button>
         )}
+        <button className="audiobtn" aria-pressed={audioOn} onClick={toggleAudio} title="Toggle NASA Quindar tones & voice telemetry callouts">
+          Audio
+        </button>
         <span className="navsep" aria-hidden="true" />
         <button aria-pressed={!visor && !cuff} onClick={() => { setCuff(false); if (visor) exitVisor() }}>
           Console
