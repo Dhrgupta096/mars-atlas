@@ -149,8 +149,8 @@ def _manifest(lats, lons, heights, seg, grade, walk_back: float, rover_back: flo
     return steps
 
 
-def _comm_and_radiation(heights, seg, d: float, walk_rt: float, rover_rt: float) -> tuple[dict, dict]:
-    """VHF Comm-Link Line-of-Sight (10 m Hab mast at A to 1.8 m suit antenna) + MSL RAD GCR radiation telemetry."""
+def _comm_and_radiation(lats, lons, heights, slopes, seg, d: float, walk_rt: float, rover_rt: float) -> tuple[dict, dict, dict]:
+    """VHF Comm-Link Line-of-Sight, MSL RAD GCR radiation telemetry, and SPE / Dust Storm emergency shelter."""
     # Geometric Mars horizon for 10 m Hab mast + 1.8 m suit helmet: sqrt(2*MARS_R*10) + sqrt(2*MARS_R*1.8) ≈ 11.73 km
     flat_los_km = (np.sqrt(2 * MARS_R * 10.0) + np.sqrt(2 * MARS_R * 1.8)) / 1000.0
     cum_m = np.concatenate(([0.0], np.cumsum(seg)))
@@ -176,13 +176,33 @@ def _comm_and_radiation(heights, seg, d: float, walk_rt: float, rover_rt: float)
     rate_usv_h = 21.0 * float(np.exp(np.clip((mean_z + 4500.0) / 11100.0, -0.5, 1.8)))
     walk_msv = (rate_usv_h * (walk_rt + 1.0)) / 1000.0
     rover_msv = (rate_usv_h * 0.65 * (rover_rt + 1.0)) / 1000.0  # 35% pressurized rover hull shielding
+    spe_rate_usv_h = round(rate_usv_h * 18.5, 1)  # S3 Solar Particle Event (~18.5x proton flux spike)
     radiation = {
         "rate_usv_h": round(rate_usv_h, 1),
         "walk_msv": round(walk_msv, 3),
         "rover_msv": round(rover_msv, 3),
+        "spe_rate_usv_h": spe_rate_usv_h,
         "status": "NOMINAL GCR" if rate_usv_h < 30.0 else "ELEVATED HIGH-ALTITUDE GCR",
     }
-    return comm, radiation
+    # Natural topographic shelter: lowest elevation / steepest escarpment alcove along route for 2-pi rock shielding
+    sh_idx = int(np.argmax(slopes - (heights - heights.min()) / 500.0))
+    sh_slope = float(slopes[sh_idx])
+    shield_pct = int(min(82, round(42 + sh_slope * 1.8)))
+    dash_km = round(float(abs(cum_m[sh_idx] - d * 0.5)) / 1000.0, 2)
+    emergency = {
+        "shelter_lat": round(float(lats[sh_idx]), 4),
+        "shelter_lon": round(float(lons[sh_idx]), 4),
+        "shelter_elev_m": int(heights[sh_idx]),
+        "shelter_type": "Escarpment Rock Alcove" if sh_slope >= 8.0 else "Basalt Depression Trench",
+        "shield_pct": shield_pct,
+        "dash_km": dash_km,
+        "dash_walk_min": max(3, int(round((dash_km / 3.8) * 60))),
+        "dash_rover_min": max(1, int(round((dash_km / 12.0) * 60))),
+        "dust_vis_km": 0.6,
+        "dust_solar_pct": 22,
+        "dust_rover_h": round(rover_rt * 1.45, 2),
+    }
+    return comm, radiation, emergency
 
 
 def _analyse(lats, lons, d) -> dict:
@@ -200,7 +220,7 @@ def _analyse(lats, lons, d) -> dict:
     stations = _stations(lats, lons, heights, slopes)
     walk_rt = walk_out + walk_back
     rover_rt = rover_out + rover_back
-    comm, radiation = _comm_and_radiation(heights, seg, float(d), walk_rt, rover_rt)
+    comm, radiation, emergency = _comm_and_radiation(lats, lons, heights, slopes, seg, float(d), walk_rt, rover_rt)
     return {
         "distance_m": round(d),
         "climb_m": int(dh[dh > 0].sum()),
@@ -219,6 +239,7 @@ def _analyse(lats, lons, d) -> dict:
         "manifest": _manifest(lats, lons, heights, seg, grade, walk_back, rover_back, stations),
         "comm": comm,
         "radiation": radiation,
+        "emergency": emergency,
         "path": [[round(float(la), 5), round(float(lo), 5)] for la, lo in zip(lats, lons)],
         "profile_m": heights.tolist(),
     }

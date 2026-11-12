@@ -49,3 +49,10 @@ https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide
 - [x] 20/22: interactive Crew & Suit configuration switcher (2-Crew 8h PLSS vs 2-Crew 10h xEMU vs 4-Crew Buddy Rovers)
 - [x] 21/22: single-command FastAPI static bundle serving (`frontend/dist`)
 - [x] 22/22: complete NASA Space Apps 2026 submission documentation & 60-second judge demo guide (`README.md`)
+
+## Phase 4 — NASA Eyes 3D Orbiters, Space Weather Survival & Outpost Base Builder
+- [x] 23/27: 3D NASA Eyes-style orbiting spacecraft (`MRO`, `TGO`, `Mars Odyssey`) with real orbital inclinations, `Ride 3D →` spacecraft camera, 3D UHF comm-link uplink beam, and MRO nadir sensor swath (`HiRISE` / `CTX` / `SHARAD`)
+- [x] 24/27: Martian butterscotch-amber `SkyAtmosphere` limb glow, solar glare, and `1×` · `60×` · `300×` orbital time-rate scrubber
+- [x] 25/27: Dynamic Solar Particle Event (`S3 Flare`) & Regional Dust Storm (`τ = 3.8`) emergency mode with real-time radiation spike (`~388 μSv/h`), 3D `[SHELTER]` bedrock escarpment locator, and 1-click `Fly to Shelter →` abort
+- [x] 26/27: Interactive Habitat Base Builder (`HAB-1`, `KRUSTY 40kW`, `ISRU-1`, `COMM-1`, `LAB-1`) with 3D surface microgrid lines and live power/water/O2 survival budgets
+- [x] 27/27: 30-second automated `★ Judge Tour` + production `Dockerfile` & `render.yaml` deployment package

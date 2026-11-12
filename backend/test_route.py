@@ -64,8 +64,9 @@ assert jez_sci["manifest"][0]["walk_t"] == "T+00:00" and jez_sci["manifest"][-1]
 haz = slope_hazards(18.38, 77.58, 18.65, 77.30)
 assert len(haz) >= 2 and haz[0]["slope_deg"] >= haz[-1]["slope_deg"] and "radius_km" in haz[0]
 
-# Comm-link LOS & MSL RAD radiation telemetry
+# Comm-link LOS, MSL RAD radiation telemetry & SPE/Dust Storm Emergency shelter
 assert short["comm"]["direct_ok"] is True and short["comm"]["los_km"] > 1.0
 assert far["comm"]["direct_ok"] is False and "Orbital Relay" in far["comm"]["relay"]
 assert jez_sci["radiation"]["rate_usv_h"] > 15.0 and jez_sci["radiation"]["rover_msv"] < jez_sci["radiation"]["walk_msv"]
+assert jez_sci["radiation"]["spe_rate_usv_h"] > 250.0 and jez_sci["emergency"]["shield_pct"] >= 42
 print("all route checks passed")

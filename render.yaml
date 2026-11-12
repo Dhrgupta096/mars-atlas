@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: mars-atlas-nasa-spaceapps-2026
+    runtime: docker
+    plan: starter
+    healthCheckPath: /api/health
+    envVars:
+      - key: PORT
+        value: 8000

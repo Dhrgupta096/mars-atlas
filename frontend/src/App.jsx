@@ -100,6 +100,191 @@ const surfLine = pairs => Cesium.Cartesian3.fromDegreesArrayHeights(pairs.flatMa
 const HOME = Cesium.Cartesian3.fromDegrees(-60, 0, 1.4e7)
 const glide = (camera, destination) => camera.flyTo({ destination, duration: 2.8, easingFunction: Cesium.EasingFunction.QUINTIC_IN_OUT })
 const CARDINAL = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
+
+const ORBITERS = [
+  { id: 'MRO', name: 'Mars Reconnaissance Orbiter', inc: 92.7, raan: 77.5, altKm: 280, vizAlt: 420000, periodMin: 112.0, speedKms: 3.42, color: '#56b4e9', payload: 'HiRISE 0.3m · CTX 6m · SHARAD Radar · Electra UHF' },
+  { id: 'TGO', name: 'ESA Trace Gas Orbiter', inc: 74.0, raan: 138.0, altKm: 400, vizAlt: 560000, periodMin: 120.0, speedKms: 3.36, color: '#5fd38d', payload: 'CaSSIS Stereo · NOMAD · FREND H2O · Electra UHF' },
+  { id: 'ODY', name: '2001 Mars Odyssey', inc: 93.1, raan: 215.0, altKm: 380, vizAlt: 490000, periodMin: 118.0, speedKms: 3.37, color: '#f2c14e', payload: 'THEMIS IR/VIS · GRS H2O · HEND · CEU UHF Relay' },
+]
+
+const BASE_MODULES = [
+  { code: 'HAB-1', name: 'Pressurized Habitat Core', kw: -12, h2o: 0, o2: 0, color: '#5fd38d', role: '4-Crew Living Quarters · Medical · Dual Airlock' },
+  { code: 'KRUSTY', name: 'Kilopower Fission + Solar Array', kw: 40, h2o: 0, o2: 0, color: '#f2c14e', role: '40 kWe Continuous Nuclear + Deploying Solar Wings' },
+  { code: 'ISRU-1', name: 'Subsurface Ice Drill & Sabatier', kw: -15, h2o: 24, o2: 16, color: '#56b4e9', role: 'Rodriguez Well Ice Extractor + CH4/O2 Liquefier' },
+  { code: 'COMM-1', name: '15m VHF/UHF Relay Mast', kw: -2, h2o: 0, o2: 0, color: '#7fd1c7', role: '18 km Surface VHF Mesh + MRO/TGO Ka/UHF Transceiver' },
+  { code: 'LAB-1', name: 'Astrobiology & Core Drill Lab', kw: -5, h2o: 4, o2: 2, color: '#e2572b', role: '2m Regolith Core Assay + Biosignature Spectrometer' },
+]
+
+const JEZERO_BASE_PRESET = [
+  { code: 'HAB-1', lat: 18.4446, lon: 77.4509, elevation_m: -2570, slope_deg: 2.1 },
+  { code: 'KRUSTY', lat: 18.452, lon: 77.462, elevation_m: -2564, slope_deg: 1.8 },
+  { code: 'ISRU-1', lat: 18.468, lon: 77.434, elevation_m: -2542, slope_deg: 3.4 },
+  { code: 'COMM-1', lat: 18.489, lon: 77.405, elevation_m: -2485, slope_deg: 5.2 },
+  { code: 'LAB-1', lat: 18.515, lon: 77.375, elevation_m: -2410, slope_deg: 6.1 },
+]
+
+function orbiterPoint(orb, phaseRad, rotDeg) {
+  const inc = (orb.inc * Math.PI) / 180
+  const lat = Math.asin(Math.max(-1, Math.min(1, Math.sin(inc) * Math.sin(phaseRad)))) * (180 / Math.PI)
+  const lonInertial = orb.raan + Math.atan2(Math.cos(inc) * Math.sin(phaseRad), Math.cos(phaseRad)) * (180 / Math.PI)
+  const lon = ((lonInertial - rotDeg) % 360 + 540) % 360 - 180
+  return [lat, lon]
+}
+
+function orbiterState(orb, epochMs) {
+  const sec = epochMs / 1000
+  const periodSec = orb.periodMin * 60
+  const phase = ((sec % periodSec) / periodSec) * Math.PI * 2
+  const rotDeg = ((sec % 88642.66) / 88642.66) * 360
+  const [lat, lon] = orbiterPoint(orb, phase, rotDeg)
+  const [nLat, nLon] = orbiterPoint(orb, phase + 0.05, rotDeg)
+  return { ...orb, lat, lon, nLat, nLon, hdg: bearingDeg(lat, lon, nLat, nLon), phase, rotDeg }
+}
+
+function tuneAtmosphere(viewer, envMode) {
+  if (!viewer) return
+  const { scene } = viewer
+  if (!scene.skyAtmosphere) scene.skyAtmosphere = new Cesium.SkyAtmosphere(MARS)
+  scene.skyAtmosphere.show = true
+  scene.skyAtmosphere.hueShift = envMode === 'dust' ? -0.52 : -0.45
+  scene.skyAtmosphere.saturationShift = envMode === 'dust' ? 0.15 : -0.12
+  scene.skyAtmosphere.brightnessShift = envMode === 'dust' ? 0.05 : -0.16
+  scene.globe.showGroundAtmosphere = true
+  if (!scene.sun) scene.sun = new Cesium.Sun()
+  scene.sun.show = true
+  scene.sun.glowFactor = 1.6
+}
+
+function syncOrbiters(ref, show, epochMs, anchor, rideId) {
+  const v = ref.current
+  if (!v || !v.orbitLayer) return
+  v.orbitLayer.show = show
+  const ents = v.orbitLayer.entities
+  ents.removeAll()
+  if (!show) return { states: [], nearest: null }
+  const states = ORBITERS.map(o => orbiterState(o, epochMs))
+  for (const st of states) {
+    const col = Cesium.Color.fromCssColorString(st.color)
+    const ringPts = Array.from({ length: 73 }, (_, i) => {
+      const [la, lo] = orbiterPoint(st, (i / 72) * Math.PI * 2, st.rotDeg)
+      return [lo, la, st.vizAlt]
+    }).flat()
+    ents.add({
+      polyline: {
+        positions: Cesium.Cartesian3.fromDegreesArrayHeights(ringPts),
+        width: rideId === st.id ? 2.6 : 1.4,
+        material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(rideId === st.id ? 0.85 : 0.42), dashLength: 14 }),
+      },
+    })
+    ents.add({
+      position: Cesium.Cartesian3.fromDegrees(st.lon, st.lat, st.vizAlt),
+      point: { pixelSize: rideId === st.id ? 13 : 9, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+      label: {
+        text: `[SAT] ${st.id} · ${st.altKm}KM · ${st.speedKms}KM/S`,
+        font: '600 10px "JetBrains Mono", ui-monospace, monospace',
+        pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+      },
+    })
+    // MRO HiRISE / CTX / SHARAD nadir sensor swath cone onto Mars surface
+    if (st.id === 'MRO') {
+      ents.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights([st.lon, st.lat, st.vizAlt, st.lon, st.lat, 400]),
+          width: 2.0,
+          material: new Cesium.PolylineGlowMaterialProperty({ color: col.withAlpha(0.75), glowPower: 0.25 }),
+        },
+      })
+      const swathDeg = 1.2
+      const swathRing = Array.from({ length: 37 }, (_, i) => {
+        const ang = (i / 36) * Math.PI * 2
+        return [Math.max(-89, Math.min(89, st.lat + swathDeg * Math.sin(ang))), st.lon + swathDeg * Math.cos(ang)]
+      })
+      ents.add({
+        polyline: {
+          positions: surfLine(swathRing), width: 1.8, arcType: Cesium.ArcType.GEODESIC,
+          material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.8), dashLength: 8 }),
+        },
+      })
+      ents.add({
+        position: surfPos(st.lon, st.lat),
+        point: { pixelSize: 6, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+        label: {
+          text: 'MRO NADIR SWATH · HiRISE / CTX / SHARAD',
+          font: '500 9px "JetBrains Mono", ui-monospace, monospace',
+          pixelOffset: new Cesium.Cartesian2(0, 14), verticalOrigin: Cesium.VerticalOrigin.TOP,
+          fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+        },
+      })
+    }
+  }
+  let nearest = states[0]
+  if (anchor) {
+    let bestD = 1e9
+    for (const st of states) {
+      const d = Math.hypot(st.lat - anchor.lat, ((st.lon - anchor.lon + 540) % 360) - 180)
+      if (d < bestD) { bestD = d; nearest = st }
+    }
+    const uCol = Cesium.Color.fromCssColorString('#56b4e9')
+    ents.add({
+      polyline: {
+        positions: Cesium.Cartesian3.fromDegreesArrayHeights([anchor.lon, anchor.lat, 600, nearest.lon, nearest.lat, nearest.vizAlt]),
+        width: 3.2,
+        material: new Cesium.PolylineGlowMaterialProperty({ color: uCol, glowPower: 0.3 }),
+      },
+    })
+  }
+  if (rideId) {
+    const target = states.find(s => s.id === rideId)
+    if (target) {
+      v.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(target.lon, target.lat, target.vizAlt + 520000),
+        orientation: { heading: Cesium.Math.toRadians(target.hdg), pitch: Cesium.Math.toRadians(-52), roll: 0 },
+      })
+    }
+  }
+  return { states, nearest }
+}
+
+function syncBaseLayer(ref, nodes) {
+  const v = ref.current
+  if (!v || !v.baseLayer) return
+  const ents = v.baseLayer.entities
+  ents.removeAll()
+  if (!nodes || nodes.length === 0) return
+  if (nodes.length > 1) {
+    ents.add({
+      polyline: {
+        positions: surfLine(nodes.map(n => [n.lat, n.lon])),
+        width: 3.5, arcType: Cesium.ArcType.GEODESIC,
+        material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString('#7fd1c7'), glowPower: 0.25 }),
+      },
+    })
+  }
+  nodes.forEach((n, idx) => {
+    const mod = BASE_MODULES.find(m => m.code === n.code) ?? BASE_MODULES[0]
+    const col = Cesium.Color.fromCssColorString(mod.color)
+    ents.add({
+      polyline: {
+        positions: Cesium.Cartesian3.fromDegreesArrayHeights([n.lon, n.lat, 400, n.lon, n.lat, 2600]),
+        width: 2.4, material: col.withAlpha(0.88),
+      },
+    })
+    ents.add({
+      position: Cesium.Cartesian3.fromDegrees(n.lon, n.lat, 2600),
+      point: { pixelSize: 11, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+      label: {
+        text: `[${idx + 1}] ${mod.code} · ${mod.name.toUpperCase()}\n${n.elevation_m !== undefined ? `${n.elevation_m.toLocaleString()}m · ${n.slope_deg}°` : ''}`,
+        font: '600 10px "JetBrains Mono", ui-monospace, monospace',
+        pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+        style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+      },
+    })
+  })
+}
 function bearingDeg(lat1, lon1, lat2, lon2) {
   const r = Math.PI / 180, p1 = lat1 * r, p2 = lat2 * r, dl = (lon2 - lon1) * r
   const y = Math.sin(dl) * Math.cos(p2)
@@ -263,6 +448,18 @@ export default function App() {
   const [replaying, setReplaying] = useState(false)
   const [audioOn, setAudioOn] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showOrbiters, setShowOrbiters] = useState(true)
+  const [rideOrb, setRideOrb] = useState(null) // null | 'MRO' | 'TGO' | 'ODY'
+  const [orbitOpen, setOrbitOpen] = useState(false)
+  const [timeRate, setTimeRate] = useState(1) // 1 | 60 | 300
+  const [orbMs, setOrbMs] = useState(() => Date.now())
+  const [envMode, setEnvMode] = useState('nominal') // 'nominal' | 'dust' | 'spe'
+  const [plannerMode, setPlannerMode] = useState('eva') // 'eva' | 'base'
+  const [baseNodes, setBaseNodes] = useState([])
+  const [nextMod, setNextMod] = useState('HAB-1')
+  const [tourStage, setTourStage] = useState(null)
+  const plannerModeRef = useRef('eva')
+  const nextModRef = useRef('HAB-1')
 
   // Globe
   useEffect(() => {
@@ -270,13 +467,13 @@ export default function App() {
       globe: new Cesium.Globe(MARS), baseLayer: false, baseLayerPicker: false, geocoder: false,
       homeButton: false, sceneModePicker: false, navigationHelpButton: false, timeline: false,
       animation: false, fullscreenButton: false, infoBox: false, selectionIndicator: false,
-      skyAtmosphere: false,
+      skyAtmosphere: new Cesium.SkyAtmosphere(MARS),
     })
     const { scene, camera } = viewer
     viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5)
     scene.postProcessStages.fxaa.enabled = true
     scene.moon = undefined
-    scene.globe.showGroundAtmosphere = false
+    tuneAtmosphere(viewer, 'nominal')
     scene.globe.depthTestAgainstTerrain = true
     scene.globe.tileCacheSize = 1000
     scene.globe.preloadAncestors = true
@@ -295,6 +492,10 @@ export default function App() {
     viewer.dataSources.add(viewer.waterLayer)
     viewer.sunLayer = new Cesium.CustomDataSource('sun')
     viewer.dataSources.add(viewer.sunLayer)
+    viewer.orbitLayer = new Cesium.CustomDataSource('orbiters')
+    viewer.dataSources.add(viewer.orbitLayer)
+    viewer.baseLayer = new Cesium.CustomDataSource('base')
+    viewer.dataSources.add(viewer.baseLayer)
 
     camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-135, 18, 5.2e7) })
     const initialHash = parseHashRoute()
@@ -311,7 +512,7 @@ export default function App() {
     }
     camera.moveEnd.addEventListener(onMove)
 
-    // Click 1 → start pin A, click 2 → destination pin B, click 3 → start over
+    // Click 1 → start pin A, click 2 → destination pin B, click 3 → start over (or drop Base Module in 'base' mode)
     const makePin = letter => Object.assign(viewer.entities.add({
       show: false,
       point: { pixelSize: 12, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
@@ -335,10 +536,27 @@ export default function App() {
       if (downPos && Cesium.Cartesian2.distance(downPos, e.position) > 5) return // ignore drags
       setIntro(false)
       setReplaying(false)
+      setRideOrb(null)
       const c = camera.pickEllipsoid(e.position, MARS)
       if (!c) return
       const g = MARS.cartesianToCartographic(c)
       const lat = Cesium.Math.toDegrees(g.latitude), lon = Cesium.Math.toDegrees(g.longitude)
+      if (plannerModeRef.current === 'base') {
+        const code = nextModRef.current
+        const idxMod = BASE_MODULES.findIndex(m => m.code === code)
+        const nextCode = BASE_MODULES[(idxMod + 1) % BASE_MODULES.length].code
+        nextModRef.current = nextCode
+        setNextMod(nextCode)
+        playQuindar(audioRef.current, `Deploying ${code} module`)
+        const nodeId = `${code}-${Date.now()}`
+        setBaseNodes(prev => [...prev, { id: nodeId, code, lat, lon }])
+        getJson(`/api/terrain?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`)
+          .then(t => {
+            setBaseNodes(prev => prev.map(n => n.id === nodeId ? { ...n, elevation_m: t.elevation_m, slope_deg: t.slope_deg, risk: t.risk, water: t.water } : n))
+          })
+          .catch(() => {})
+        return
+      }
       setRouteData(null)
       setHoverIdx(null)
       setRoute(prev => {
@@ -491,6 +709,27 @@ export default function App() {
         })
       }
     }
+    if (act?.emergency) {
+      const em = act.emergency
+      const shCol = Cesium.Color.fromCssColorString(envMode === 'spe' ? '#e5484d' : '#56b4e9')
+      ents.add({
+        polyline: {
+          positions: Cesium.Cartesian3.fromDegreesArrayHeights([em.shelter_lon, em.shelter_lat, 400, em.shelter_lon, em.shelter_lat, 3100]),
+          width: 2.5, material: shCol.withAlpha(0.9),
+        },
+      })
+      ents.add({
+        position: Cesium.Cartesian3.fromDegrees(em.shelter_lon, em.shelter_lat, 3100),
+        point: { pixelSize: envMode === 'spe' ? 12 : 8, color: shCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+        label: {
+          text: `[SHELTER] ${em.shelter_type.toUpperCase()} (${em.shield_pct}% SHIELD)`,
+          font: '600 10px "JetBrains Mono", ui-monospace, monospace',
+          pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          fillColor: shCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
+          style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+        },
+      })
+    }
     if (showHazards && hazards) {
       for (const hz of hazards) {
         const hCol = Cesium.Color.fromCssColorString(hz.slope_deg >= 20 ? '#e5484d' : hz.slope_deg >= 10 ? '#f2c14e' : '#e2572b')
@@ -519,7 +758,7 @@ export default function App() {
         })
       }
     }
-  }, [route, routeData, profKey, showHazards])
+  }, [route, routeData, profKey, showHazards, envMode])
 
   // Real NASA Mars Trek WMTS base (zoom 0–7) + high-resolution 100m THEMIS / HRSC detail overlay on deep zoom
   useEffect(() => {
@@ -648,12 +887,59 @@ export default function App() {
     syncSunlight(viewerRef, sunlight, mars, center)
   }, [sunlight, mars, center])
 
+  // Atmosphere limb glow & dust storm tuning
+  useEffect(() => {
+    tuneAtmosphere(viewerRef.current, envMode)
+  }, [envMode])
+
+  // Base Builder 3D nodes & microgrid
+  useEffect(() => {
+    syncBaseLayer(viewerRef, baseNodes)
+  }, [baseNodes])
+
+  // Orbital propagation ticker (1x / 60x / 300x) + 3D MRO/TGO/Odyssey satellites & UHF uplink beam
+  useEffect(() => {
+    const id = setInterval(() => {
+      setOrbMs(prev => prev + 250 * timeRate)
+      if (timeRate > 1) {
+        setSimMs(prev => (prev ?? Date.now()) + 250 * timeRate)
+      }
+    }, 250)
+    return () => clearInterval(id)
+  }, [timeRate])
+
+  const surfAnchor = route[0] ?? baseNodes[0] ?? null
+  useEffect(() => {
+    syncOrbiters(viewerRef, showOrbiters, simMs ?? orbMs, surfAnchor, rideOrb)
+  }, [showOrbiters, simMs, orbMs, surfAnchor, rideOrb])
+
   // UI entrance
   useEffect(() => {
     const ctx = gsap.context(() => gsap.from('.ui', { opacity: 0, y: 10, duration: 0.9, stagger: 0.08, delay: 1.6, ease: 'power3.out' }))
     return () => ctx.revert()
   }, [])
 
+  const switchPlannerMode = m => {
+    plannerModeRef.current = m
+    setPlannerMode(m)
+  }
+  const selectBaseMod = code => {
+    nextModRef.current = code
+    setNextMod(code)
+  }
+  const loadJezeroBase = () => {
+    setIntro(false)
+    setReplaying(false)
+    setRideOrb(null)
+    switchPlannerMode('base')
+    setBaseNodes(JEZERO_BASE_PRESET.map((n, i) => ({ ...n, id: `${n.code}-${i}` })))
+    playQuindar(audioRef.current, 'Deploying five-module Jezero Crater surface outpost')
+    glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(77.425, 18.475, 28000))
+  }
+  const clearBase = () => {
+    setBaseNodes([])
+    syncBaseLayer(viewerRef, [])
+  }
   const toggleAudio = () => {
     const next = !audioOn
     audioRef.current = next
@@ -870,11 +1156,70 @@ export default function App() {
     setHoverMarker(viewerRef, false)
   }
   const activeDate = simMs !== null ? new Date(simMs) : now
-  const shiftSim = deltaMs => setSimMs( prev => (prev ?? now.getTime()) + deltaMs)
+  const shiftSim = deltaMs => setSimMs(prev => (prev ?? now.getTime()) + deltaMs)
+
+  // 30-Second Automated Judge Demo Tour
+  useEffect(() => {
+    if (tourStage === null) return
+    let t = null
+    if (tourStage === 0) {
+      t = setTimeout(() => {
+        setTourStage(1)
+        setTimeRate(60)
+        setRideOrb('MRO')
+        playQuindar(audioRef.current, 'Stage 2: Mars Reconnaissance Orbiter polar relay pass and SHARAD radar swath')
+      }, 7500)
+    } else if (tourStage === 1) {
+      t = setTimeout(() => {
+        setTourStage(2)
+        setRideOrb(null)
+        setTimeRate(1)
+        setEnvMode('spe')
+        playQuindar(audioRef.current, 'Stage 3: Alert, S3 Solar Particle Event detected, routing crew to escarpment rock shelter')
+        const em = (routeData?.safe ?? routeData?.direct)?.emergency
+        if (em) glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(em.shelter_lon, em.shelter_lat, 24000))
+      }, 7500)
+    } else if (tourStage === 2) {
+      t = setTimeout(() => {
+        setTourStage(3)
+        setEnvMode('nominal')
+        loadJezeroBase()
+      }, 7500)
+    } else if (tourStage === 3) {
+      t = setTimeout(() => {
+        setTourStage(null)
+        playQuindar(audioRef.current, 'Judge demonstration tour complete')
+      }, 7500)
+    }
+    return () => { if (t) clearTimeout(t) }
+  }, [tourStage, routeData])
+
+  const startTour = () => {
+    setIntro(false)
+    setVisor(false)
+    setCuff(false)
+    setEnvMode('nominal')
+    setRideOrb(null)
+    switchPlannerMode('eva')
+    loadPreset(PRESET_EVAS[0])
+    setTourStage(0)
+    playQuindar(audioRef.current, 'Starting NASA Space Apps Judge Tour. Stage 1: Jezero Delta EVA and 3D MOLA terrain curtain')
+  }
+  const stopTour = () => {
+    setTourStage(null)
+    setRideOrb(null)
+    setTimeRate(1)
+  }
+
+  const baseTotals = baseNodes.reduce((acc, n) => {
+    const mod = BASE_MODULES.find(m => m.code === n.code) ?? BASE_MODULES[0]
+    const kw = mod.kw > 0 && envMode === 'dust' ? Math.round(mod.kw * 0.55) : mod.kw
+    return { kw: acc.kw + kw, h2o: acc.h2o + mod.h2o, o2: acc.o2 + mod.o2 }
+  }, { kw: 0, h2o: 0, o2: 0 })
 
   return (
     <>
-      <div ref={globeRef} className={`globe${mars?.dust_season && sunlight ? ' dust-haze' : ''}`} />
+      <div ref={globeRef} className={`globe${(mars?.dust_season && sunlight) || envMode === 'dust' ? ' dust-haze' : ''}${envMode === 'spe' ? ' spe-haze' : ''}`} />
 
       {intro && !visor && (
         <div className="intro-card" role="dialog" aria-label="Mission Briefing">
@@ -883,8 +1228,44 @@ export default function App() {
           <p>Interplanetary Survival Guide &amp; Martian EVA Route Planner</p>
           <div className="intro-actions">
             <button className="intro-primary" onClick={() => setIntro(false)}>Enter Mission Console →</button>
-            <button onClick={() => loadPreset(PRESET_EVAS[0])}>Launch Jezero Delta EVA →</button>
+            <button onClick={startTour}>★ 30s Judge Demo Tour →</button>
           </div>
+        </div>
+      )}
+
+      {!visor && (envMode !== 'nominal' || rideOrb || tourStage !== null) && (
+        <div className={`ui alertbar ${envMode}`} role="status" aria-live="polite">
+          {tourStage !== null && (
+            <span>
+              <b>★ JUDGE TOUR [{tourStage + 1}/4]:</b>{' '}
+              {['Jezero Delta EVA + 3D MOLA Terrain Curtain', 'NASA Eyes MRO Ride-Along & SHARAD Nadir Swath (60×)', 'S3 Solar Particle Event · Emergency Rock Shelter Abort', 'Jezero 5-Module Habitat Outpost & Microgrid'][tourStage]}
+              <button onClick={stopTour}>■ Stop Tour</button>
+            </span>
+          )}
+          {rideOrb && tourStage === null && (
+            <span>
+              <b>ORBITAL TELEMETRY LOCK · {rideOrb}:</b> Riding {ORBITERS.find(o => o.id === rideOrb)?.name} ({ORBITERS.find(o => o.id === rideOrb)?.payload})
+              <button onClick={() => { setRideOrb(null); glide(viewerRef.current.camera, HOME) }}>Exit Orbit View ×</button>
+            </span>
+          )}
+          {envMode === 'dust' && (
+            <span>
+              <b>REGIONAL DUST STORM (τ = 3.8):</b> Visibility 0.6 km · Solar Output 22% · Rover Speed -45%
+              <button onClick={() => setEnvMode('nominal')}>Clear Storm ×</button>
+            </span>
+          )}
+          {envMode === 'spe' && (
+            <span>
+              <b>SOLAR PARTICLE EVENT (S3 FLARE):</b> Dose Rate {activeRoute?.radiation?.spe_rate_usv_h ?? 388.5} μSv/h (18.5× Spike) ·{' '}
+              {activeRoute?.emergency ? `Abort to ${activeRoute.emergency.shelter_type} (${activeRoute.emergency.shield_pct}% Rock Shield · ${activeRoute.emergency.dash_rover_min}m Rover Dash)` : 'Seek Subsurface / Escarpment Shelter Immediately'}
+              {activeRoute?.emergency && (
+                <button onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(activeRoute.emergency.shelter_lon, activeRoute.emergency.shelter_lat, 18000))}>
+                  Fly to Shelter →
+                </button>
+              )}
+              <button onClick={() => setEnvMode('nominal')}>Clear Alert ×</button>
+            </span>
+          )}
         </div>
       )}
 
@@ -892,6 +1273,9 @@ export default function App() {
         <div className="brand">
           <button className="mark" onClick={goHome} aria-label="Back to full Mars view">MARS<span>/</span>ATLAS</button>
           <span className="missiontag">ORBITAL EVA PLANNER · MOLA 32PPD + THEMIS 100M</span>
+          <button className="tourbtn" aria-pressed={tourStage !== null} onClick={() => tourStage !== null ? stopTour() : startTour()}>
+            {tourStage !== null ? `■ Tour (${tourStage + 1}/4)` : '★ Judge Tour'}
+          </button>
         </div>
         <dl className="clocks">
           <div>
@@ -908,6 +1292,10 @@ export default function App() {
       <div className="dock-left">
         {!visor && !cuff && (
           <section className="ui panel search">
+            <div className="modeswitch" role="group" aria-label="Mission Planner Mode">
+              <button aria-pressed={plannerMode === 'eva'} onClick={() => switchPlannerMode('eva')}>EVA Route (A→B)</button>
+              <button aria-pressed={plannerMode === 'base'} onClick={() => switchPlannerMode('base')}>Base Builder ({baseNodes.length})</button>
+            </div>
             <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mars (Jezero, Olympus…)" autoComplete="off" />
             {results.length > 0 ? (
               <ul role="listbox" aria-label="Places">
@@ -915,6 +1303,23 @@ export default function App() {
                   <li key={p.name}><button onClick={() => flyTo(p)}><span>{p.name}</span><em>{p.kind}</em></button></li>
                 ))}
               </ul>
+            ) : plannerMode === 'base' ? (
+              <div className="quickhub">
+                <label>Click Mars to Drop Module (Next: {nextMod})</label>
+                <div className="chipgrid">
+                  {BASE_MODULES.map(m => (
+                    <button key={m.code} aria-pressed={nextMod === m.code} onClick={() => selectBaseMod(m.code)} style={{ borderColor: nextMod === m.code ? m.color : undefined }}>
+                      {m.code} · {m.kw > 0 ? `+${m.kw}kW` : `${m.kw}kW`}
+                    </button>
+                  ))}
+                </div>
+                <div className="evacards">
+                  <button onClick={loadJezeroBase}>
+                    <span>Deploy Jezero 5-Node Outpost</span>
+                    <em>1-Click Base</em>
+                  </button>
+                </div>
+              </div>
             ) : (
               <div className="quickhub">
                 <label>Featured Landmarks</label>
@@ -923,7 +1328,7 @@ export default function App() {
                     <button key={p.name} onClick={() => flyTo(p)}>{p.name.replace(/ \(.*\)/, '')}</button>
                   ))}
                 </div>
-                <label>1-Click EVA Simulations</label>
+                <label>1-Click EVA &amp; Base Simulations</label>
                 <div className="evacards">
                   {PRESET_EVAS.map(p => (
                     <button key={p.id} onClick={() => loadPreset(p)}>
@@ -931,9 +1336,45 @@ export default function App() {
                       <em>A → B</em>
                     </button>
                   ))}
+                  <button onClick={loadJezeroBase}>
+                    <span>Jezero 5-Node Outpost</span>
+                    <em>HAB + ISRU</em>
+                  </button>
                 </div>
               </div>
             )}
+
+            <div className="envsim">
+              <label>Survival &amp; Space Weather Sim</label>
+              <div className="envbtns" role="group" aria-label="Space Weather and Dust Storm Simulation">
+                <button aria-pressed={envMode === 'nominal'} onClick={() => setEnvMode('nominal')}>Nominal</button>
+                <button className="dustbtn" aria-pressed={envMode === 'dust'} onClick={() => { setEnvMode('dust'); playQuindar(audioRef.current, 'Warning: Regional dust storm tau 3.8') }}>Dust τ=3.8</button>
+                <button className="spebtn" aria-pressed={envMode === 'spe'} onClick={() => { setEnvMode('spe'); playQuindar(audioRef.current, 'Red Alert: S3 Solar Particle Event, abort to rock shelter') }}>Solar Flare S3</button>
+              </div>
+            </div>
+
+            <div className="rovers">
+              <div className="rovhead">
+                <button className="sectoggle" aria-expanded={orbitOpen} onClick={() => setOrbitOpen(o => !o)}>
+                  NASA Eyes Orbiters (3) {orbitOpen ? '▴' : '▾'}
+                </button>
+                <button className="toggle" aria-pressed={showOrbiters} onClick={() => { setShowOrbiters(s => !s); if (rideOrb) setRideOrb(null) }}>
+                  {showOrbiters ? '3D Live' : 'Hidden'}
+                </button>
+              </div>
+              {orbitOpen && ORBITERS.map(orb => (
+                <div key={orb.id} className="rovcard">
+                  <div className="rovmain">
+                    <span style={{ color: orb.color }}>● {orb.id} · {orb.altKm} km</span>
+                    <button className="ridebtn" aria-pressed={rideOrb === orb.id} onClick={() => { setShowOrbiters(true); setRideOrb(r => r === orb.id ? null : orb.id) }}>
+                      {rideOrb === orb.id ? 'Riding ×' : 'Ride 3D →'}
+                    </button>
+                  </div>
+                  <div className="orbmeta">{orb.payload}</div>
+                </div>
+              ))}
+            </div>
+
             {rovers.length > 0 && (
               <div className="rovers">
                 <div className="rovhead">
@@ -979,8 +1420,13 @@ export default function App() {
           <div className="localhead">
             <div className="coord">{fmtDeg(center.lat, 'N', 'S')} &nbsp; {fmtDeg(center.lon, 'E', 'W')}</div>
             <div className="localbtns">
-              <button className="livebtn" aria-pressed={simMs === null} onClick={() => setSimMs(null)}>
-                {simMs === null ? '● LIVE' : '↺ LIVE'}
+              {[1, 60, 300].map(r => (
+                <button key={r} className="ratebtn" aria-pressed={timeRate === r} onClick={() => setTimeRate(r)} title={`Orbit & Time Speed ${r}x`}>
+                  {r}×
+                </button>
+              ))}
+              <button className="livebtn" aria-pressed={simMs === null && timeRate === 1} onClick={() => { setTimeRate(1); setSimMs(null) }}>
+                {simMs === null && timeRate === 1 ? '● LIVE' : '↺ LIVE'}
               </button>
               <button className="toggle" aria-expanded={dateOpen} onClick={() => setDateOpen(o => !o)}>
                 {dateOpen ? 'Date ▴' : 'Date ▾'}
@@ -1023,14 +1469,17 @@ export default function App() {
       {!visor && !cuff && (
         <p className="ui hint" aria-live="polite">
           <span className="hintdot" />
-          {loadingRoute
-            ? 'Computing safest & science routes across MOLA terrain…'
-            : ['Step 1/2 · Click Mars to set start pin A', 'Step 2/2 · Click destination pin B', 'EVA Route A → B active · click Mars for new A'][route.length]}
-          {route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
+          {plannerMode === 'base'
+            ? `Base Builder · Click Mars to drop ${nextMod} (${baseNodes.length} modules placed)`
+            : loadingRoute
+              ? 'Computing safest & science routes across MOLA terrain…'
+              : ['Step 1/2 · Click Mars to set start pin A', 'Step 2/2 · Click destination pin B', 'EVA Route A → B active · click Mars for new A'][route.length]}
+          {plannerMode === 'base' && baseNodes.length > 0 && <button className="clearbtn" onClick={clearBase}>× Clear Base</button>}
+          {plannerMode === 'eva' && route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
         </p>
       )}
 
-      {!visor && (preview || cuff || routeData) && (
+      {!visor && (preview || cuff || routeData || baseNodes.length > 0) && (
         <div className="dock-right">
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
@@ -1047,6 +1496,46 @@ export default function App() {
               <button className="prevvisor" onClick={() => { setVisorAnchor({ lat: preview.lat, lon: preview.lon }); setVisor(true) }}>
                 Open Ground View in Visor HUD →
               </button>
+            </aside>
+          )}
+
+          {!cuff && baseNodes.length > 0 && (
+            <aside className="ui panel basepanel" aria-live="polite">
+              <div className="routehead">
+                <span className="sectoggle">Martian Outpost Microgrid ({baseNodes.length})</span>
+                <span className="badge" style={{ color: baseTotals.kw >= 0 ? '#5fd38d' : '#e5484d', borderColor: baseTotals.kw >= 0 ? '#5fd38d' : '#e5484d' }}>
+                  {baseTotals.kw >= 0 ? `GRID +${baseTotals.kw} KW` : `DEFICIT ${baseTotals.kw} KW`}
+                </span>
+              </div>
+              <div className="cuffstats">
+                <span><b style={{ color: baseTotals.kw >= 0 ? '#5fd38d' : '#e5484d' }}>{baseTotals.kw >= 0 ? `+${baseTotals.kw}` : baseTotals.kw} kW</b> POWER</span>
+                <span><b style={{ color: '#56b4e9' }}>+{baseTotals.h2o} L/sol</b> ISRU H2O</span>
+                <span><b style={{ color: '#7fd1c7' }}>+{baseTotals.o2} kg/sol</b> O2/CH4</span>
+                <span><b>{baseNodes.length}</b> NODES</span>
+              </div>
+              <ul className="manifestlist baselist">
+                {baseNodes.map((n, i) => {
+                  const mod = BASE_MODULES.find(m => m.code === n.code) ?? BASE_MODULES[0]
+                  return (
+                    <li key={n.id}>
+                      <div className="manrow">
+                        <button className="manjump" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(n.lon, n.lat, 24000))}>
+                          <b style={{ color: mod.color }}>#{i + 1} {mod.code}</b> <span>{mod.name}</span> <em>{mod.kw > 0 ? `+${mod.kw}kW` : `${mod.kw}kW`}</em>
+                        </button>
+                      </div>
+                      <div className="manact">
+                        {fmtDeg(n.lat, 'N', 'S')} {fmtDeg(n.lon, 'E', 'W')}
+                        {n.elevation_m !== undefined ? ` · ${n.elevation_m.toLocaleString()} m · Slope ${n.slope_deg}°` : ''} — {mod.role}
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+              <div className="routeactions">
+                <button className="replaybtn" onClick={loadJezeroBase}>Reset 5-Node</button>
+                <button className="sharebtn" onClick={clearBase}>× Clear Base</button>
+                <button className="visorlaunch" onClick={() => { setVisorAnchor({ lat: baseNodes[0].lat, lon: baseNodes[0].lon }); enterVisor() }}>Visor HUD →</button>
+              </div>
             </aside>
           )}
 
@@ -1382,6 +1871,9 @@ export default function App() {
         ))}
         <button className="sunbtn" aria-pressed={sunlight} onClick={() => setSunlight(s => !s)} title="Toggle real Mars24 day/night shadow and solar terminator">
           Sunlight
+        </button>
+        <button className="orbbtn" aria-pressed={showOrbiters} onClick={() => { setShowOrbiters(s => !s); if (rideOrb) setRideOrb(null) }} title="Toggle 3D MRO, TGO, and Mars Odyssey orbiters">
+          Orbiters
         </button>
         <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
           Water

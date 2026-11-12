@@ -220,3 +220,40 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .visor-controls .visor-exit { border-color: var(--oxide); color: var(--oxide); }
 .visor-scrub { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 210px; font-size: 10px; letter-spacing: .1em; color: var(--muted); }
 .visor-scrub input { width: 100%; accent-color: var(--oxide); cursor: pointer; }
+
+.globe.spe-haze::after { background: radial-gradient(circle at 50% 50%, rgba(229, 72, 77, 0.14) 0%, rgba(226, 87, 43, 0.14) 48%, rgba(13, 10, 9, 0.62) 88%); }
+.tourbtn { all: unset; pointer-events: auto; cursor: pointer; padding: 3px 8px; font: 600 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #f2c14e; border: 1px solid rgba(242, 193, 78, 0.55); background: rgba(242, 193, 78, 0.1); transition: background .2s, color .2s; }
+.tourbtn:hover, .tourbtn[aria-pressed="true"] { background: #f2c14e; color: var(--basalt); }
+
+.alertbar { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 14; display: flex; flex-direction: column; gap: 4px; padding: 7px 14px; background: rgba(15, 11, 10, 0.94); border: 1px solid #56b4e9; border-top: 2px solid #56b4e9; font: 500 10px var(--mono); letter-spacing: .08em; color: var(--dust); white-space: nowrap; backdrop-filter: blur(10px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65); }
+.alertbar.dust { border-color: #f2c14e; border-top-color: #f2c14e; }
+.alertbar.spe { border-color: #e5484d; border-top-color: #e5484d; background: rgba(28, 10, 11, 0.94); }
+.alertbar span { display: flex; align-items: center; gap: 8px; }
+.alertbar b { color: #56b4e9; letter-spacing: .1em; }
+.alertbar.dust b { color: #f2c14e; }
+.alertbar.spe b { color: #e5484d; }
+.alertbar button { all: unset; cursor: pointer; padding: 2px 7px; border: 1px solid var(--line); font: 600 9px var(--mono); text-transform: uppercase; color: var(--dust); background: rgba(232, 224, 214, 0.06); }
+.alertbar button:hover { border-color: var(--oxide); color: var(--oxide); }
+.alertbar ~ .hint { top: 102px; }
+
+.modeswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px; }
+.modeswitch button { all: unset; cursor: pointer; padding: 4px 6px; text-align: center; font: 600 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); }
+.modeswitch button[aria-pressed="true"] { color: var(--basalt); background: var(--dust); border-color: var(--dust); }
+
+.envsim { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.envbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 4px; }
+.envbtns button { all: unset; cursor: pointer; padding: 4px 4px; text-align: center; font: 600 9px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); }
+.envbtns button[aria-pressed="true"] { color: #5fd38d; border-color: #5fd38d; background: rgba(95, 211, 141, 0.08); }
+.envbtns button.dustbtn[aria-pressed="true"] { color: #f2c14e; border-color: #f2c14e; background: rgba(242, 193, 78, 0.12); }
+.envbtns button.spebtn[aria-pressed="true"] { color: #e5484d; border-color: #e5484d; background: rgba(229, 72, 77, 0.14); }
+
+.ridebtn { all: unset; cursor: pointer; padding: 2px 6px; font: 600 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: #56b4e9; border: 1px solid rgba(86, 180, 233, 0.45); }
+.ridebtn:hover, .ridebtn[aria-pressed="true"] { background: #56b4e9; color: var(--basalt); }
+.orbmeta { margin-top: 2px; font: 9px var(--mono); color: var(--muted); }
+
+.ratebtn { all: unset; cursor: pointer; padding: 2px 5px; font: 600 9px var(--mono); color: var(--muted); border: 1px solid var(--line); }
+.ratebtn[aria-pressed="true"] { color: #56b4e9; border-color: #56b4e9; background: rgba(86, 180, 233, 0.1); }
+
+.basepanel { flex: 0 1 auto; min-height: 0; overflow-y: auto; border-top-color: #5fd38d; }
+.baselist { max-height: 155px; }
+.layers button.orbbtn[aria-pressed="true"] { color: var(--basalt); background: #56b4e9; }
