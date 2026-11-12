@@ -5,6 +5,7 @@ import gsap from 'gsap'
 const MARS = Cesium.Ellipsoid.MARS
 Cesium.Ellipsoid.default = MARS
 
+const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ/'
 const USGS_WMS = 'https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/mars_simp_cyl.map'
 const LAYERS = {
   Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'THEMIS' },
@@ -17,13 +18,11 @@ const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d'
 const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
 
 function trekLayer({ id, maxLevel }) {
-  return new Cesium.UrlTemplateImageryProvider({
-    url: `/api/trek/${id}/{z}/{y}/{x}.jpg`,
+  return new Cesium.WebMapTileServiceImageryProvider({
+    url: `${TREK}${id}/1.0.0/default/default028mm/{TileMatrix}/{TileRow}/{TileCol}.jpg`,
+    layer: id, style: 'default', tileMatrixSetID: 'default028mm',
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
-    maximumLevel: maxLevel,
-    tileWidth: 256,
-    tileHeight: 256,
-    credit: 'NASA / JPL-Caltech · Mars Trek (Local Disk Cache)',
+    maximumLevel: maxLevel, credit: 'NASA / JPL-Caltech · Mars Trek',
   })
 }
 
@@ -58,7 +57,7 @@ function createMolaTerrainProvider(scale = 2.0) {
 
 function localTileLayer(mode, maxLevel = 8) {
   return new Cesium.UrlTemplateImageryProvider({
-    url: `/api/tiles/${mode}/{z}/{y}/{x}.png`,
+    url: `/api/tiles/${mode}/{z}/{y}/{x}.png?v=3`,
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
     maximumLevel: maxLevel,
     tileWidth: 256,
@@ -344,7 +343,7 @@ function syncBaseLayer(ref, nodes) {
     const isEven = idx % 2 === 0
     ents.add({
       position: surfPos(n.lon, n.lat),
-      point: { pixelSize: 10, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
+      point: { pixelSize: 10, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, heightReference: CLAMP_GND },
       label: {
         text: `#${idx + 1} ${mod.code}${n.elevation_m !== undefined ? ` · ${n.elevation_m.toLocaleString()}m` : ''}`,
         font: '600 10px "JetBrains Mono", ui-monospace, monospace',
@@ -352,7 +351,7 @@ function syncBaseLayer(ref, nodes) {
         horizontalOrigin: isEven ? Cesium.HorizontalOrigin.LEFT : Cesium.HorizontalOrigin.RIGHT,
         fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
         distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3.5e5),
-        heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
+        heightReference: CLAMP_GND,
         eyeOffset: EYE_OFFSET,
       },
     })
@@ -599,14 +598,14 @@ export default function App() {
     // Click 1 → start pin A, click 2 → destination pin B, click 3 → start over (or drop Base Module in 'base' mode)
     const makePin = (letter, below = false) => Object.assign(viewer.entities.add({
       show: false,
-      point: { pixelSize: 11, outlineColor: Cesium.Color.WHITE, outlineWidth: 2, heightReference: CLAMP_GND, disableDepthTestDistance: 1.5e6 },
+      point: { pixelSize: 11, outlineColor: Cesium.Color.WHITE, outlineWidth: 2, heightReference: CLAMP_GND },
       label: {
         font: '600 11px "JetBrains Mono", ui-monospace, monospace',
         pixelOffset: new Cesium.Cartesian2(0, below ? 16 : -16),
         verticalOrigin: below ? Cesium.VerticalOrigin.TOP : Cesium.VerticalOrigin.BOTTOM,
         fillColor: Cesium.Color.WHITE,
         showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
-        heightReference: CLAMP_GND, disableDepthTestDistance: 1.5e6,
+        heightReference: CLAMP_GND,
         eyeOffset: EYE_OFFSET,
       },
     }), { letter })
@@ -719,7 +718,7 @@ export default function App() {
           pixelOffset: new Cesium.Cartesian2(0, -6), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.8e5),
-          heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
+          heightReference: CLAMP_GND,
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -752,14 +751,14 @@ export default function App() {
     const stCol = Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk])
     ents.add({
       position: surfPos(direct.max_slope_at.lon, direct.max_slope_at.lat),
-      point: { pixelSize: 7, color: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
+      point: { pixelSize: 7, color: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND },
       label: {
         show: profKey === 'direct',
         text: `▲ ${direct.max_slope_deg}° MAX`, font: '600 10px "JetBrains Mono", ui-monospace, monospace',
         pixelOffset: new Cesium.Cartesian2(12, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
         fillColor: stCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
         distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, maxLabelDist),
-        heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
+        heightReference: CLAMP_GND,
         eyeOffset: EYE_OFFSET,
       },
     })
@@ -783,7 +782,7 @@ export default function App() {
         const isEven = idx % 2 === 0
         ents.add({
           position: surfPos(st.lon, st.lat),
-          point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
+          point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, heightReference: CLAMP_GND },
           label: {
             show: profKey === 'science',
             text: `${st.id} · ${st.kind.toUpperCase()}`, font: '600 10px "JetBrains Mono", ui-monospace, monospace',
@@ -791,7 +790,7 @@ export default function App() {
             horizontalOrigin: isEven ? Cesium.HorizontalOrigin.LEFT : Cesium.HorizontalOrigin.RIGHT,
             fillColor: gold, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, maxLabelDist),
-            heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
+            heightReference: CLAMP_GND,
             eyeOffset: EYE_OFFSET,
           },
         })
@@ -802,13 +801,13 @@ export default function App() {
       const shCol = Cesium.Color.fromCssColorString(envMode === 'spe' ? '#e5484d' : '#f2c14e')
       ents.add({
         position: surfPos(em.shelter_lon, em.shelter_lat),
-        point: { pixelSize: 11, color: shCol, outlineColor: Cesium.Color.WHITE, outlineWidth: 2, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
+        point: { pixelSize: 11, color: shCol, outlineColor: Cesium.Color.WHITE, outlineWidth: 2, heightReference: CLAMP_GND },
         label: {
           text: `[SHELTER · ${em.shield_pct}% SHIELD]`,
           font: '600 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: shCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
-          heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
+          heightReference: CLAMP_GND,
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -830,13 +829,13 @@ export default function App() {
         })
         ents.add({
           position: surfPos(hz.lon, hz.lat),
-          point: { pixelSize: 6, color: hCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
+          point: { pixelSize: 6, color: hCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND },
           label: {
             text: `HAZARD ${hz.slope_deg}°`, font: '500 9px "JetBrains Mono", ui-monospace, monospace',
             pixelOffset: new Cesium.Cartesian2(0, -10), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             fillColor: hCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.2e5),
-            heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
+            heightReference: CLAMP_GND,
             eyeOffset: EYE_OFFSET,
           },
         })
@@ -919,14 +918,14 @@ export default function App() {
       })
       ents.add({
         position: surfPos(w.lon, w.lat),
-        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
+        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND },
         label: {
           text: `[H2O] ${w.name.toUpperCase()} · ${w.yield.toUpperCase()}`,
           font: '500 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 7e6),
-          heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
+          heightReference: CLAMP_GND,
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -948,14 +947,14 @@ export default function App() {
       for (const wp of rv.waypoints) {
         ents.add({
           position: surfPos(wp.lon, wp.lat),
-          point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
+          point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND },
           label: {
             text: `${rv.name.toUpperCase()} · ${wp.label.toUpperCase()}`,
             font: '500 10px "JetBrains Mono", ui-monospace, monospace',
             pixelOffset: new Cesium.Cartesian2(8, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
             fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.6e5),
-            heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
+            heightReference: CLAMP_GND,
             eyeOffset: EYE_OFFSET,
           },
         })
@@ -968,14 +967,14 @@ export default function App() {
     for (const p of places) {
       ents.add({
         position: surfPos(p.lon, p.lat),
-        point: { pixelSize: 6, color: Cesium.Color.fromCssColorString(KIND_COLOR[p.kind]), outlineColor: Cesium.Color.BLACK, outlineWidth: 1, heightReference: CLAMP_GND, disableDepthTestDistance: 1.2e6 },
+        point: { pixelSize: 6, color: Cesium.Color.fromCssColorString(KIND_COLOR[p.kind]), outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND },
         label: {
-          text: p.name.toUpperCase(), font: '500 10px "JetBrains Mono", ui-monospace, monospace',
+          text: p.name.toUpperCase(), font: '600 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
-          fillColor: Cesium.Color.fromCssColorString('#e8e0d6'),
+          fillColor: Cesium.Color.fromCssColorString('#f2f0ea'),
           showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(3e5, 8.5e6),
-          heightReference: CLAMP_GND, disableDepthTestDistance: 1.2e6,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(2e5, 2.2e7),
+          heightReference: CLAMP_GND,
           eyeOffset: EYE_OFFSET,
         },
       })
