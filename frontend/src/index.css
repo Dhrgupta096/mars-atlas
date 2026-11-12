@@ -35,7 +35,8 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .mark:focus-visible { outline: 1px solid var(--oxide); outline-offset: 6px; }
 .mark span { color: var(--oxide); margin: 0 0.2em; }
 .missiontag { font: 500 9px var(--mono); letter-spacing: 0.14em; color: var(--oxide); border: 1px solid rgba(226, 87, 43, 0.4); background: rgba(226, 87, 43, 0.08); padding: 3px 7px; }
-.clocks { display: flex; gap: 24px; margin: 0; }
+@media (max-width: 1180px) { .missiontag { display: none; } }
+.clocks { display: flex; gap: 18px; margin: 0; }
 .clocks div { text-align: right; }
 .clocks dt { font: 9px var(--mono); letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .clocks dd { margin: 3px 0 0; font: 500 14px var(--mono); font-variant-numeric: tabular-nums; }
@@ -158,7 +159,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .clearbtn { all: unset; cursor: pointer; color: var(--oxide); font-weight: 600; margin-left: 4px; }
 .clearbtn:hover { color: var(--dust); }
 .navsep { display: inline-block; width: 1px; height: 24px; background: var(--line); vertical-align: middle; margin: 0 2px; }
-.layers button { all: unset; cursor: pointer; padding: 7px 11px; font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); transition: color .2s, background .25s; }
+.layers button { all: unset; cursor: pointer; padding: 6px 8px; font: 500 9.5px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); transition: color .2s, background .25s; }
 .layers button[aria-pressed="true"] { color: var(--basalt); background: var(--dust); font-weight: 600; }
 .layers button.sunbtn[aria-pressed="true"] { color: var(--basalt); background: #f2c14e; }
 .layers button.waterbtn[aria-pressed="true"] { color: var(--basalt); background: #56b4e9; }

@@ -141,111 +141,144 @@ function orbiterState(orb, epochMs) {
   return { ...orb, lat, lon, nLat, nLon, hdg: bearingDeg(lat, lon, nLat, nLon), phase, rotDeg }
 }
 
-function tuneAtmosphere(viewer, envMode) {
-  if (!viewer) return
-  const { scene } = viewer
-  if (!scene.skyAtmosphere) scene.skyAtmosphere = new Cesium.SkyAtmosphere(MARS)
-  scene.skyAtmosphere.show = true
-  scene.skyAtmosphere.hueShift = envMode === 'dust' ? -0.52 : -0.45
-  scene.skyAtmosphere.saturationShift = envMode === 'dust' ? 0.15 : -0.12
-  scene.skyAtmosphere.brightnessShift = envMode === 'dust' ? 0.05 : -0.16
-  scene.globe.showGroundAtmosphere = true
-  if (!scene.sun) scene.sun = new Cesium.Sun()
-  scene.sun.show = true
-  scene.sun.glowFactor = 1.6
+const LABEL_BG = new Cesium.Color(0.05, 0.04, 0.04, 0.88)
+const LABEL_PAD = new Cesium.Cartesian2(6, 4)
+
+const ORB_CLOCK = {
+  baseSimMs: Date.now(),
+  baseWallMs: Date.now(),
+  rate: 1,
+  show: true,
+  anchor: null,
+  rideId: null,
+}
+function getOrbEpoch() {
+  return ORB_CLOCK.baseSimMs + (Date.now() - ORB_CLOCK.baseWallMs) * ORB_CLOCK.rate
 }
 
-function syncOrbiters(ref, show, epochMs, anchor, rideId) {
+function tuneAtmosphere(viewer) {
+  if (!viewer) return
+  const { scene } = viewer
+  if (scene.skyAtmosphere) scene.skyAtmosphere.show = false
+  scene.globe.showGroundAtmosphere = false
+  if (!scene.sun) scene.sun = new Cesium.Sun()
+  scene.sun.show = true
+  scene.sun.glowFactor = 1.4
+}
+
+function syncOrbiters(ref, show, simMs, timeRate, anchor, rideId) {
+  ORB_CLOCK.baseSimMs = simMs ?? getOrbEpoch()
+  ORB_CLOCK.baseWallMs = Date.now()
+  ORB_CLOCK.rate = timeRate
+  ORB_CLOCK.show = show
+  ORB_CLOCK.anchor = anchor
+  ORB_CLOCK.rideId = rideId
+
   const v = ref.current
   if (!v || !v.orbitLayer) return
   v.orbitLayer.show = show
   const ents = v.orbitLayer.entities
+  if (!show) {
+    ents.removeAll()
+    v._orbKey = null
+    return
+  }
+  const orbKey = `${rideId ?? 'none'}:${anchor ? `${anchor.lat.toFixed(2)},${anchor.lon.toFixed(2)}` : 'no-anchor'}`
+  if (v._orbKey === orbKey) return
+  v._orbKey = orbKey
   ents.removeAll()
-  if (!show) return { states: [], nearest: null }
-  const states = ORBITERS.map(o => orbiterState(o, epochMs))
-  for (const st of states) {
-    const col = Cesium.Color.fromCssColorString(st.color)
-    const ringPts = Array.from({ length: 73 }, (_, i) => {
-      const [la, lo] = orbiterPoint(st, (i / 72) * Math.PI * 2, st.rotDeg)
-      return [lo, la, st.vizAlt]
-    }).flat()
+
+  for (const orb of ORBITERS) {
+    const col = Cesium.Color.fromCssColorString(orb.color)
     ents.add({
       polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights(ringPts),
-        width: rideId === st.id ? 2.6 : 1.4,
-        material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(rideId === st.id ? 0.85 : 0.42), dashLength: 14 }),
+        positions: new Cesium.CallbackProperty(() => {
+          const st = orbiterState(orb, getOrbEpoch())
+          const pts = Array.from({ length: 73 }, (_, i) => {
+            const [la, lo] = orbiterPoint(orb, (i / 72) * Math.PI * 2, st.rotDeg)
+            return [lo, la, orb.vizAlt]
+          }).flat()
+          return Cesium.Cartesian3.fromDegreesArrayHeights(pts)
+        }, false),
+        width: rideId === orb.id ? 2.4 : 1.3,
+        arcType: Cesium.ArcType.NONE,
+        material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(rideId === orb.id ? 0.85 : 0.36), dashLength: 14 }),
       },
     })
     ents.add({
-      position: Cesium.Cartesian3.fromDegrees(st.lon, st.lat, st.vizAlt),
-      point: { pixelSize: rideId === st.id ? 13 : 9, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+      position: new Cesium.CallbackProperty(() => {
+        const st = orbiterState(orb, getOrbEpoch())
+        return Cesium.Cartesian3.fromDegrees(st.lon, st.lat, orb.vizAlt)
+      }, false),
+      point: { pixelSize: rideId === orb.id ? 12 : 8, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
       label: {
-        text: `[SAT] ${st.id} · ${st.altKm}KM · ${st.speedKms}KM/S`,
+        text: `${orb.id} · ${orb.altKm} km`,
         font: '600 10px "JetBrains Mono", ui-monospace, monospace',
-        pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+        pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+        fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
       },
     })
-    // MRO HiRISE / CTX / SHARAD nadir sensor swath cone onto Mars surface
-    if (st.id === 'MRO') {
+    // Show MRO nadir radar/camera swath cone when riding MRO
+    if (orb.id === 'MRO' && rideId === 'MRO') {
       ents.add({
         polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArrayHeights([st.lon, st.lat, st.vizAlt, st.lon, st.lat, 400]),
-          width: 2.0,
-          material: new Cesium.PolylineGlowMaterialProperty({ color: col.withAlpha(0.75), glowPower: 0.25 }),
-        },
-      })
-      const swathDeg = 1.2
-      const swathRing = Array.from({ length: 37 }, (_, i) => {
-        const ang = (i / 36) * Math.PI * 2
-        return [Math.max(-89, Math.min(89, st.lat + swathDeg * Math.sin(ang))), st.lon + swathDeg * Math.cos(ang)]
-      })
-      ents.add({
-        polyline: {
-          positions: surfLine(swathRing), width: 1.8, arcType: Cesium.ArcType.GEODESIC,
-          material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.8), dashLength: 8 }),
+          positions: new Cesium.CallbackProperty(() => {
+            const st = orbiterState(orb, getOrbEpoch())
+            return Cesium.Cartesian3.fromDegreesArrayHeights([st.lon, st.lat, orb.vizAlt, st.lon, st.lat, 400])
+          }, false),
+          width: 2.2,
+          arcType: Cesium.ArcType.NONE,
+          material: new Cesium.PolylineGlowMaterialProperty({ color: col.withAlpha(0.8), glowPower: 0.25 }),
         },
       })
       ents.add({
-        position: surfPos(st.lon, st.lat),
-        point: { pixelSize: 6, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+        position: new Cesium.CallbackProperty(() => {
+          const st = orbiterState(orb, getOrbEpoch())
+          return surfPos(st.lon, st.lat)
+        }, false),
+        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
         label: {
-          text: 'MRO NADIR SWATH · HiRISE / CTX / SHARAD',
-          font: '500 9px "JetBrains Mono", ui-monospace, monospace',
+          text: 'MRO SWATH · HiRISE / SHARAD',
+          font: '600 9px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, 14), verticalOrigin: Cesium.VerticalOrigin.TOP,
-          fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+          fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+          eyeOffset: EYE_OFFSET,
         },
       })
     }
   }
-  let nearest = states[0]
+
   if (anchor) {
-    let bestD = 1e9
-    for (const st of states) {
-      const d = Math.hypot(st.lat - anchor.lat, ((st.lon - anchor.lon + 540) % 360) - 180)
-      if (d < bestD) { bestD = d; nearest = st }
-    }
     const uCol = Cesium.Color.fromCssColorString('#56b4e9')
     ents.add({
       polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights([anchor.lon, anchor.lat, 600, nearest.lon, nearest.lat, nearest.vizAlt]),
-        width: 3.2,
-        material: new Cesium.PolylineGlowMaterialProperty({ color: uCol, glowPower: 0.3 }),
+        positions: new Cesium.CallbackProperty(() => {
+          const a = ORB_CLOCK.anchor
+          if (!a) return []
+          const states = ORBITERS.map(o => orbiterState(o, getOrbEpoch()))
+          let nearest = states[0], bestD = 1e9
+          for (const st of states) {
+            const dLon = ((st.lon - a.lon + 540) % 360) - 180
+            const d = Math.hypot(st.lat - a.lat, dLon)
+            if (d < bestD) { bestD = d; nearest = st }
+          }
+          if (bestD > 68) return [] // orbiter below local horizon — prevent line cutting through Mars interior
+          const dLon = ((nearest.lon - a.lon + 540) % 360) - 180
+          const pts = Array.from({ length: 9 }, (_, i) => {
+            const t = i / 8
+            const la = a.lat + (nearest.lat - a.lat) * t
+            const lo = a.lon + dLon * t
+            const h = 600 + (nearest.vizAlt - 600) * Math.pow(t, 0.85) + Math.sin(t * Math.PI) * 85000
+            return [lo, la, h]
+          }).flat()
+          return Cesium.Cartesian3.fromDegreesArrayHeights(pts)
+        }, false),
+        width: 2.8,
+        arcType: Cesium.ArcType.NONE,
+        material: new Cesium.PolylineGlowMaterialProperty({ color: uCol, glowPower: 0.28 }),
       },
     })
   }
-  if (rideId) {
-    const target = states.find(s => s.id === rideId)
-    if (target) {
-      v.camera.setView({
-        destination: Cesium.Cartesian3.fromDegrees(target.lon, target.lat, target.vizAlt + 520000),
-        orientation: { heading: Cesium.Math.toRadians(target.hdg), pitch: Cesium.Math.toRadians(-52), roll: 0 },
-      })
-    }
-  }
-  return { states, nearest }
 }
 
 function syncBaseLayer(ref, nodes) {
@@ -266,21 +299,24 @@ function syncBaseLayer(ref, nodes) {
   nodes.forEach((n, idx) => {
     const mod = BASE_MODULES.find(m => m.code === n.code) ?? BASE_MODULES[0]
     const col = Cesium.Color.fromCssColorString(mod.color)
+    const isEven = idx % 2 === 0
     ents.add({
       polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights([n.lon, n.lat, 400, n.lon, n.lat, 2600]),
-        width: 2.4, material: col.withAlpha(0.88),
+        positions: Cesium.Cartesian3.fromDegreesArrayHeights([n.lon, n.lat, 400, n.lon, n.lat, 1800]),
+        width: 2.2, arcType: Cesium.ArcType.NONE, material: col.withAlpha(0.88),
       },
     })
     ents.add({
-      position: Cesium.Cartesian3.fromDegrees(n.lon, n.lat, 2600),
-      point: { pixelSize: 11, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+      position: Cesium.Cartesian3.fromDegrees(n.lon, n.lat, 1800),
+      point: { pixelSize: 10, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
       label: {
-        text: `[${idx + 1}] ${mod.code} · ${mod.name.toUpperCase()}\n${n.elevation_m !== undefined ? `${n.elevation_m.toLocaleString()}m · ${n.slope_deg}°` : ''}`,
+        text: `#${idx + 1} ${mod.code}${n.elevation_m !== undefined ? ` · ${n.elevation_m.toLocaleString()}m` : ''}`,
         font: '600 10px "JetBrains Mono", ui-monospace, monospace',
-        pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-        fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+        pixelOffset: new Cesium.Cartesian2(isEven ? 12 : -12, -4),
+        horizontalOrigin: isEven ? Cesium.HorizontalOrigin.LEFT : Cesium.HorizontalOrigin.RIGHT,
+        fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3.5e5),
+        eyeOffset: EYE_OFFSET,
       },
     })
   })
@@ -310,15 +346,13 @@ function setPinAB(ref, a, b) {
   if (!pins) return
   ;[a, b].forEach((pt, idx) => {
     const pin = pins[idx]
-    const where = `${pin.letter}\n${fmtDeg(pt.lat, 'N', 'S')}  ${fmtDeg(pt.lon, 'E', 'W')}`
     pin.position = surfPos(pt.lon, pt.lat)
-    pin.label.text = where
+    pin.label.text = `${pin.letter}\n${fmtDeg(pt.lat, 'N', 'S')} ${fmtDeg(pt.lon, 'E', 'W')}`
     pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
     pin.show = true
     getJson(`/api/terrain?lat=${pt.lat.toFixed(4)}&lon=${pt.lon.toFixed(4)}`)
       .then(t => {
-        const w = t.water ? `\nWater: ${t.water.status} (${t.water.detail})` : ''
-        pin.label.text = `${where}\nHeight ${t.elevation_m.toLocaleString()} m\nSlope ${t.slope_deg}° · ${t.risk.toUpperCase()}${w}`
+        pin.label.text = `${pin.letter}\n${t.elevation_m.toLocaleString()} m · ${t.slope_deg}° ${t.risk.toUpperCase()}`
         pin.point.color = Cesium.Color.fromCssColorString(RISK_COLOR[t.risk])
       })
       .catch(() => {})
@@ -425,7 +459,7 @@ export default function App() {
   const [rovers, setRovers] = useState([])
   const [showRovers, setShowRovers] = useState(true)
   const [waterSites, setWaterSites] = useState([])
-  const [showWater, setShowWater] = useState(true)
+  const [showWater, setShowWater] = useState(false)
   const [loadingRoute, setLoadingRoute] = useState(() => !!parseHashRoute())
   const [visor, setVisor] = useState(false)
   const [cuff, setCuff] = useState(false)
@@ -452,7 +486,6 @@ export default function App() {
   const [rideOrb, setRideOrb] = useState(null) // null | 'MRO' | 'TGO' | 'ODY'
   const [orbitOpen, setOrbitOpen] = useState(false)
   const [timeRate, setTimeRate] = useState(1) // 1 | 60 | 300
-  const [orbMs, setOrbMs] = useState(() => Date.now())
   const [envMode, setEnvMode] = useState('nominal') // 'nominal' | 'dust' | 'spe'
   const [plannerMode, setPlannerMode] = useState('eva') // 'eva' | 'base'
   const [baseNodes, setBaseNodes] = useState([])
@@ -467,13 +500,13 @@ export default function App() {
       globe: new Cesium.Globe(MARS), baseLayer: false, baseLayerPicker: false, geocoder: false,
       homeButton: false, sceneModePicker: false, navigationHelpButton: false, timeline: false,
       animation: false, fullscreenButton: false, infoBox: false, selectionIndicator: false,
-      skyAtmosphere: new Cesium.SkyAtmosphere(MARS),
+      skyAtmosphere: false,
     })
     const { scene, camera } = viewer
     viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5)
     scene.postProcessStages.fxaa.enabled = true
     scene.moon = undefined
-    tuneAtmosphere(viewer, 'nominal')
+    tuneAtmosphere(viewer)
     scene.globe.depthTestAgainstTerrain = true
     scene.globe.tileCacheSize = 1000
     scene.globe.preloadAncestors = true
@@ -497,6 +530,18 @@ export default function App() {
     viewer.baseLayer = new Cesium.CustomDataSource('base')
     viewer.dataSources.add(viewer.baseLayer)
 
+    const onPreRender = () => {
+      if (!ORB_CLOCK.rideId || !ORB_CLOCK.show) return
+      const orb = ORBITERS.find(o => o.id === ORB_CLOCK.rideId)
+      if (!orb) return
+      const st = orbiterState(orb, getOrbEpoch())
+      camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(st.lon, st.lat, st.vizAlt + 520000),
+        orientation: { heading: Cesium.Math.toRadians(st.hdg), pitch: Cesium.Math.toRadians(-52), roll: 0 },
+      })
+    }
+    scene.preRender.addEventListener(onPreRender)
+
     camera.setView({ destination: Cesium.Cartesian3.fromDegrees(-135, 18, 5.2e7) })
     const initialHash = parseHashRoute()
     if (!initialHash) {
@@ -513,18 +558,21 @@ export default function App() {
     camera.moveEnd.addEventListener(onMove)
 
     // Click 1 → start pin A, click 2 → destination pin B, click 3 → start over (or drop Base Module in 'base' mode)
-    const makePin = letter => Object.assign(viewer.entities.add({
+    const makePin = (letter, below = false) => Object.assign(viewer.entities.add({
       show: false,
-      point: { pixelSize: 12, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+      point: { pixelSize: 11, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
       label: {
-        font: '500 12px "JetBrains Mono", ui-monospace, monospace', pixelOffset: new Cesium.Cartesian2(0, -22),
-        verticalOrigin: Cesium.VerticalOrigin.BOTTOM, fillColor: Cesium.Color.WHITE, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+        font: '600 11px "JetBrains Mono", ui-monospace, monospace',
+        pixelOffset: new Cesium.Cartesian2(0, below ? 16 : -16),
+        verticalOrigin: below ? Cesium.VerticalOrigin.TOP : Cesium.VerticalOrigin.BOTTOM,
+        fillColor: Cesium.Color.WHITE,
+        showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+        eyeOffset: EYE_OFFSET,
       },
     }), { letter })
-    const pins = [makePin('A · START'), makePin('B · DESTINATION')]
+    const pins = [makePin('A · START', false), makePin('B · DEST', true)]
     viewer.pins = pins
-    viewer.hoverPin = makePin('')
+    viewer.hoverPin = makePin('', false)
     if (initialHash) {
       setPinAB(viewerRef, initialHash.a, initialHash.b)
       glide(camera, Cesium.Cartesian3.fromDegrees((initialHash.a.lon + initialHash.b.lon) / 2, (initialHash.a.lat + initialHash.b.lat) / 2, 52000))
@@ -565,22 +613,20 @@ export default function App() {
         playQuindar(audioRef.current, next.length === 1 ? 'Start pin Alpha locked' : 'Destination Bravo locked, computing MOLA route')
         if (prev.length === 2) pins[1].show = false
         const pin = pins[next.length - 1]
-        const where = `${pin.letter}\n${fmtDeg(lat, 'N', 'S')}  ${fmtDeg(lon, 'E', 'W')}`
         pin.position = surfPos(lon, lat)
-        pin.label.text = where
+        pin.label.text = `${pin.letter}\n${fmtDeg(lat, 'N', 'S')} ${fmtDeg(lon, 'E', 'W')}`
         pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
         pin.show = true
         getJson(`/api/terrain?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`)
           .then(t => {
-            const w = t.water ? `\nWater: ${t.water.status} (${t.water.detail})` : ''
-            pin.label.text = `${where}\nHeight ${t.elevation_m.toLocaleString()} m\nSlope ${t.slope_deg}° · ${t.risk.toUpperCase()}${w}`
+            pin.label.text = `${pin.letter}\n${t.elevation_m.toLocaleString()} m · ${t.slope_deg}° ${t.risk.toUpperCase()}`
             pin.point.color = Cesium.Color.fromCssColorString(RISK_COLOR[t.risk])
           })
           .catch(() => {})
         return next
       })
     }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
-    return () => { clearTimeout(introTimer); handler.destroy(); viewer.destroy() }
+    return () => { clearTimeout(introTimer); scene.preRender.removeEventListener(onPreRender); handler.destroy(); viewer.destroy() }
   }, [])
 
   // A + B set → fetch routes
@@ -599,7 +645,9 @@ export default function App() {
 
   // Render walk-back rings, VHF comm horizon, 3D route lines, 3D terrain curtain wall, 3D vertical station beacons, and MOLA slope hazard zones
   useEffect(() => {
-    const ents = viewerRef.current.routeLayer.entities
+    const v = viewerRef.current
+    if (v?.placesLayer) v.placesLayer.show = route.length === 0 && baseNodes.length === 0
+    const ents = v.routeLayer.entities
     ents.removeAll()
     setHoverMarker(viewerRef, false)
     if (route.length < 1) return
@@ -609,7 +657,7 @@ export default function App() {
     const act = routeData && (routeData[profKey] ?? routeData.direct)
     const rings = [[6000, '#5fd38d', '6 KM FOOT EVA LIMIT'], [12000, '#f2c14e', '12 KM ROVER WALK-BACK LIMIT']]
     if (act?.comm?.los_km) {
-      rings.push([act.comm.los_km * 1000, '#56b4e9', `HAB VHF LOS HORIZON (${act.comm.los_km} KM)`])
+      rings.push([act.comm.los_km * 1000, '#56b4e9', `HAB VHF LOS (${act.comm.los_km} KM)`])
     }
     for (const [radM, hex, tag] of rings) {
       const col = Cesium.Color.fromCssColorString(hex)
@@ -626,17 +674,19 @@ export default function App() {
       ents.add({
         position: surfPos(a.lon, a.lat + radM * degPerM),
         label: {
-          text: tag, font: '500 10px "JetBrains Mono", ui-monospace, monospace',
+          text: tag, font: '500 9px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -6), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 6e5),
+          fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.8e5),
           eyeOffset: EYE_OFFSET,
         },
       })
     }
     if (!routeData) return
     const { direct, safe, science, hazards } = routeData
-    if (act && act.path.length > 1) {
+    const maxLabelDist = Math.min(Math.max(direct.distance_m * 3.0, 160000), 1200000)
+
+    if (act && act.path.length > 1 && act.distance_m <= 250000) {
       const pMin = Math.min(...act.profile_m)
       const pSpan = Math.max(Math.max(...act.profile_m) - pMin, 1)
       const wCol = Cesium.Color.fromCssColorString(ROUTE_COLOR[profKey])
@@ -644,10 +694,10 @@ export default function App() {
         wall: {
           positions: Cesium.Cartesian3.fromDegreesArray(act.path.flatMap(([la, lo]) => [lo, la])),
           minimumHeights: act.profile_m.map(() => 400),
-          maximumHeights: act.profile_m.map(h => 480 + ((h - pMin) / pSpan) * 2100),
-          material: wCol.withAlpha(0.22),
+          maximumHeights: act.profile_m.map(h => 480 + ((h - pMin) / pSpan) * 1800),
+          material: wCol.withAlpha(0.2),
           outline: true,
-          outlineColor: wCol.withAlpha(0.65),
+          outlineColor: wCol.withAlpha(0.6),
         },
       })
     }
@@ -659,19 +709,15 @@ export default function App() {
     })
     const stCol = Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk])
     ents.add({
-      polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights([direct.max_slope_at.lon, direct.max_slope_at.lat, 400, direct.max_slope_at.lon, direct.max_slope_at.lat, 2400]),
-        width: 2, material: stCol.withAlpha(0.75),
-      },
-    })
-    ents.add({
-      position: Cesium.Cartesian3.fromDegrees(direct.max_slope_at.lon, direct.max_slope_at.lat, 2400),
-      point: { pixelSize: 8, color: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+      position: surfPos(direct.max_slope_at.lon, direct.max_slope_at.lat),
+      point: { pixelSize: 7, color: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
       label: {
-        text: `STEEPEST ${direct.max_slope_deg}°`, font: '500 11px "JetBrains Mono", ui-monospace, monospace',
-        pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
-        fillColor: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-        style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+        show: profKey === 'direct',
+        text: `▲ ${direct.max_slope_deg}° MAX`, font: '600 10px "JetBrains Mono", ui-monospace, monospace',
+        pixelOffset: new Cesium.Cartesian2(12, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
+        fillColor: stCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+        distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, maxLabelDist),
+        eyeOffset: EYE_OFFSET,
       },
     })
     if (safe) {
@@ -690,43 +736,35 @@ export default function App() {
           material: new Cesium.PolylineGlowMaterialProperty({ color: gold, glowPower: profKey === 'science' ? 0.32 : 0.18 }),
         },
       })
-      for (const st of science.stations) {
+      science.stations.forEach((st, idx) => {
+        const isEven = idx % 2 === 0
         ents.add({
-          polyline: {
-            positions: Cesium.Cartesian3.fromDegreesArrayHeights([st.lon, st.lat, 400, st.lon, st.lat, 2800]),
-            width: 2.2, material: gold.withAlpha(0.85),
-          },
-        })
-        ents.add({
-          position: Cesium.Cartesian3.fromDegrees(st.lon, st.lat, 2800),
-          point: { pixelSize: 10, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+          position: surfPos(st.lon, st.lat),
+          point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
           label: {
-            text: `${st.id} · ${st.kind.toUpperCase()} (${st.elevation_m}M)`, font: '600 10px "JetBrains Mono", ui-monospace, monospace',
-            pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            fillColor: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+            show: profKey === 'science',
+            text: `${st.id} · ${st.kind.toUpperCase()}`, font: '600 10px "JetBrains Mono", ui-monospace, monospace',
+            pixelOffset: new Cesium.Cartesian2(isEven ? 14 : -14, 0),
+            horizontalOrigin: isEven ? Cesium.HorizontalOrigin.LEFT : Cesium.HorizontalOrigin.RIGHT,
+            fillColor: gold, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, maxLabelDist),
+            eyeOffset: EYE_OFFSET,
           },
         })
-      }
-    }
-    if (act?.emergency) {
-      const em = act.emergency
-      const shCol = Cesium.Color.fromCssColorString(envMode === 'spe' ? '#e5484d' : '#56b4e9')
-      ents.add({
-        polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArrayHeights([em.shelter_lon, em.shelter_lat, 400, em.shelter_lon, em.shelter_lat, 3100]),
-          width: 2.5, material: shCol.withAlpha(0.9),
-        },
       })
+    }
+    if (act?.emergency && envMode !== 'nominal') {
+      const em = act.emergency
+      const shCol = Cesium.Color.fromCssColorString(envMode === 'spe' ? '#e5484d' : '#f2c14e')
       ents.add({
-        position: Cesium.Cartesian3.fromDegrees(em.shelter_lon, em.shelter_lat, 3100),
-        point: { pixelSize: envMode === 'spe' ? 12 : 8, color: shCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+        position: surfPos(em.shelter_lon, em.shelter_lat),
+        point: { pixelSize: 11, color: shCol, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
         label: {
-          text: `[SHELTER] ${em.shelter_type.toUpperCase()} (${em.shield_pct}% SHIELD)`,
+          text: `[SHELTER · ${em.shield_pct}% SHIELD]`,
           font: '600 10px "JetBrains Mono", ui-monospace, monospace',
-          pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          fillColor: shCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE, eyeOffset: EYE_OFFSET,
+          pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+          fillColor: shCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+          eyeOffset: EYE_OFFSET,
         },
       })
     }
@@ -751,14 +789,14 @@ export default function App() {
           label: {
             text: `HAZARD ${hz.slope_deg}°`, font: '500 9px "JetBrains Mono", ui-monospace, monospace',
             pixelOffset: new Cesium.Cartesian2(0, -10), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-            fillColor: hCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3.5e5),
+            fillColor: hCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.2e5),
             eyeOffset: EYE_OFFSET,
           },
         })
       }
     }
-  }, [route, routeData, profKey, showHazards, envMode])
+  }, [route, routeData, profKey, showHazards, envMode, baseNodes.length])
 
   // Real NASA Mars Trek WMTS base (zoom 0–7) + high-resolution 100m THEMIS / HRSC detail overlay on deep zoom
   useEffect(() => {
@@ -809,8 +847,8 @@ export default function App() {
           text: `[H2O] ${w.name.toUpperCase()} · ${w.yield.toUpperCase()}`,
           font: '500 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
-          fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 7e6),
+          fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 7e6),
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -837,9 +875,8 @@ export default function App() {
             text: `${rv.name.toUpperCase()} · ${wp.label.toUpperCase()}`,
             font: '500 10px "JetBrains Mono", ui-monospace, monospace',
             pixelOffset: new Cesium.Cartesian2(8, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
-            fillColor: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.5e5),
+            fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+            distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.6e5),
             eyeOffset: EYE_OFFSET,
           },
         })
@@ -854,10 +891,11 @@ export default function App() {
         position: surfPos(p.lon, p.lat),
         point: { pixelSize: 6, color: Cesium.Color.fromCssColorString(KIND_COLOR[p.kind]), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
         label: {
-          text: p.name.toUpperCase(), font: '500 11px "JetBrains Mono", ui-monospace, monospace',
+          text: p.name.toUpperCase(), font: '500 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
-          fillColor: Cesium.Color.fromCssColorString('#e8e0d6'), outlineColor: Cesium.Color.BLACK, outlineWidth: 3,
-          style: Cesium.LabelStyle.FILL_AND_OUTLINE, distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 9e6),
+          fillColor: Cesium.Color.fromCssColorString('#e8e0d6'),
+          showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(3e5, 8.5e6),
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -887,31 +925,24 @@ export default function App() {
     syncSunlight(viewerRef, sunlight, mars, center)
   }, [sunlight, mars, center])
 
-  // Atmosphere limb glow & dust storm tuning
-  useEffect(() => {
-    tuneAtmosphere(viewerRef.current, envMode)
-  }, [envMode])
-
   // Base Builder 3D nodes & microgrid
   useEffect(() => {
     syncBaseLayer(viewerRef, baseNodes)
   }, [baseNodes])
 
-  // Orbital propagation ticker (1x / 60x / 300x) + 3D MRO/TGO/Odyssey satellites & UHF uplink beam
+  // When timeRate > 1 (60x / 300x), advance Mars clock every 1.5s without re-rendering 4x/sec
   useEffect(() => {
+    if (timeRate <= 1) return
     const id = setInterval(() => {
-      setOrbMs(prev => prev + 250 * timeRate)
-      if (timeRate > 1) {
-        setSimMs(prev => (prev ?? Date.now()) + 250 * timeRate)
-      }
-    }, 250)
+      setSimMs(prev => (prev ?? Date.now()) + 1500 * timeRate)
+    }, 1500)
     return () => clearInterval(id)
   }, [timeRate])
 
   const surfAnchor = route[0] ?? baseNodes[0] ?? null
   useEffect(() => {
-    syncOrbiters(viewerRef, showOrbiters, simMs ?? orbMs, surfAnchor, rideOrb)
-  }, [showOrbiters, simMs, orbMs, surfAnchor, rideOrb])
+    syncOrbiters(viewerRef, showOrbiters, simMs, timeRate, surfAnchor, rideOrb)
+  }, [showOrbiters, simMs, timeRate, surfAnchor, rideOrb])
 
   // UI entrance
   useEffect(() => {
