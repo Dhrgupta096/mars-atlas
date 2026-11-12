@@ -490,7 +490,6 @@ export default function App() {
   const [plannerMode, setPlannerMode] = useState('eva') // 'eva' | 'base'
   const [baseNodes, setBaseNodes] = useState([])
   const [nextMod, setNextMod] = useState('HAB-1')
-  const [tourStage, setTourStage] = useState(null)
   const plannerModeRef = useRef('eva')
   const nextModRef = useRef('HAB-1')
 
@@ -1189,59 +1188,6 @@ export default function App() {
   const activeDate = simMs !== null ? new Date(simMs) : now
   const shiftSim = deltaMs => setSimMs(prev => (prev ?? now.getTime()) + deltaMs)
 
-  // 30-Second Automated Judge Demo Tour
-  useEffect(() => {
-    if (tourStage === null) return
-    let t = null
-    if (tourStage === 0) {
-      t = setTimeout(() => {
-        setTourStage(1)
-        setTimeRate(60)
-        setRideOrb('MRO')
-        playQuindar(audioRef.current, 'Stage 2: Mars Reconnaissance Orbiter polar relay pass and SHARAD radar swath')
-      }, 7500)
-    } else if (tourStage === 1) {
-      t = setTimeout(() => {
-        setTourStage(2)
-        setRideOrb(null)
-        setTimeRate(1)
-        setEnvMode('spe')
-        playQuindar(audioRef.current, 'Stage 3: Alert, S3 Solar Particle Event detected, routing crew to escarpment rock shelter')
-        const em = (routeData?.safe ?? routeData?.direct)?.emergency
-        if (em) glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(em.shelter_lon, em.shelter_lat, 24000))
-      }, 7500)
-    } else if (tourStage === 2) {
-      t = setTimeout(() => {
-        setTourStage(3)
-        setEnvMode('nominal')
-        loadJezeroBase()
-      }, 7500)
-    } else if (tourStage === 3) {
-      t = setTimeout(() => {
-        setTourStage(null)
-        playQuindar(audioRef.current, 'Judge demonstration tour complete')
-      }, 7500)
-    }
-    return () => { if (t) clearTimeout(t) }
-  }, [tourStage, routeData])
-
-  const startTour = () => {
-    setIntro(false)
-    setVisor(false)
-    setCuff(false)
-    setEnvMode('nominal')
-    setRideOrb(null)
-    switchPlannerMode('eva')
-    loadPreset(PRESET_EVAS[0])
-    setTourStage(0)
-    playQuindar(audioRef.current, 'Starting NASA Space Apps Judge Tour. Stage 1: Jezero Delta EVA and 3D MOLA terrain curtain')
-  }
-  const stopTour = () => {
-    setTourStage(null)
-    setRideOrb(null)
-    setTimeRate(1)
-  }
-
   const baseTotals = baseNodes.reduce((acc, n) => {
     const mod = BASE_MODULES.find(m => m.code === n.code) ?? BASE_MODULES[0]
     const kw = mod.kw > 0 && envMode === 'dust' ? Math.round(mod.kw * 0.55) : mod.kw
@@ -1259,21 +1205,14 @@ export default function App() {
           <p>Interplanetary Survival Guide &amp; Martian EVA Route Planner</p>
           <div className="intro-actions">
             <button className="intro-primary" onClick={() => setIntro(false)}>Enter Mission Console →</button>
-            <button onClick={startTour}>★ 30s Judge Demo Tour →</button>
+            <button onClick={() => loadPreset(PRESET_EVAS[0])}>Launch Jezero EVA →</button>
           </div>
         </div>
       )}
 
-      {!visor && (envMode !== 'nominal' || rideOrb || tourStage !== null) && (
+      {!visor && (envMode !== 'nominal' || rideOrb) && (
         <div className={`ui alertbar ${envMode}`} role="status" aria-live="polite">
-          {tourStage !== null && (
-            <span>
-              <b>★ JUDGE TOUR [{tourStage + 1}/4]:</b>{' '}
-              {['Jezero Delta EVA + 3D MOLA Terrain Curtain', 'NASA Eyes MRO Ride-Along & SHARAD Nadir Swath (60×)', 'S3 Solar Particle Event · Emergency Rock Shelter Abort', 'Jezero 5-Module Habitat Outpost & Microgrid'][tourStage]}
-              <button onClick={stopTour}>■ Stop Tour</button>
-            </span>
-          )}
-          {rideOrb && tourStage === null && (
+          {rideOrb && (
             <span>
               <b>ORBITAL TELEMETRY LOCK · {rideOrb}:</b> Riding {ORBITERS.find(o => o.id === rideOrb)?.name} ({ORBITERS.find(o => o.id === rideOrb)?.payload})
               <button onClick={() => { setRideOrb(null); glide(viewerRef.current.camera, HOME) }}>Exit Orbit View ×</button>
@@ -1304,9 +1243,6 @@ export default function App() {
         <div className="brand">
           <button className="mark" onClick={goHome} aria-label="Back to full Mars view">MARS<span>/</span>ATLAS</button>
           <span className="missiontag">ORBITAL EVA PLANNER · MOLA 32PPD + THEMIS 100M</span>
-          <button className="tourbtn" aria-pressed={tourStage !== null} onClick={() => tourStage !== null ? stopTour() : startTour()}>
-            {tourStage !== null ? `■ Tour (${tourStage + 1}/4)` : '★ Judge Tour'}
-          </button>
         </div>
         <dl className="clocks">
           <div>

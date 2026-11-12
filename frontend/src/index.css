@@ -223,8 +223,6 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .visor-scrub input { width: 100%; accent-color: var(--oxide); cursor: pointer; }
 
 .globe.spe-haze::after { background: radial-gradient(circle at 50% 50%, rgba(229, 72, 77, 0.14) 0%, rgba(226, 87, 43, 0.14) 48%, rgba(13, 10, 9, 0.62) 88%); }
-.tourbtn { all: unset; pointer-events: auto; cursor: pointer; padding: 3px 8px; font: 600 9px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: #f2c14e; border: 1px solid rgba(242, 193, 78, 0.55); background: rgba(242, 193, 78, 0.1); transition: background .2s, color .2s; }
-.tourbtn:hover, .tourbtn[aria-pressed="true"] { background: #f2c14e; color: var(--basalt); }
 
 .alertbar { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 14; display: flex; flex-direction: column; gap: 4px; padding: 7px 14px; background: rgba(15, 11, 10, 0.94); border: 1px solid #56b4e9; border-top: 2px solid #56b4e9; font: 500 10px var(--mono); letter-spacing: .08em; color: var(--dust); white-space: nowrap; backdrop-filter: blur(10px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65); }
 .alertbar.dust { border-color: #f2c14e; border-top-color: #f2c14e; }
