@@ -8,9 +8,9 @@ Cesium.Ellipsoid.default = MARS
 const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ/'
 const USGS_WMS = 'https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/mars_simp_cyl.map'
 const LAYERS = {
-  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, relief: 'HRSC_MOLA_Blend_Hillshade', reliefAlpha: 0.26, detail: 'THEMIS', detailMin: 5, detailAlpha: 0.64 },
-  'THEMIS 100m': { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, relief: 'THEMIS', reliefAlpha: 0.35, detail: 'MOLA_THEMIS_blend', detailMin: 4, detailAlpha: 0.92 },
-  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade', detailMin: 4, detailAlpha: 0.58 },
+  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'THEMIS' },
+  'THEMIS 100m': { wms: 'MOLA_THEMIS_blend', maxLevel: 12, detail: 'THEMIS' },
+  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade' },
 }
 const KIND_COLOR = { rover: '#7fd1c7', lander: '#7fd1c7', ice: '#f2f0ea', volcano: '#e2572b', crater: '#d9b26f', canyon: '#d9b26f', basin: '#d9b26f', plain: '#d9b26f' }
 const EARTH_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -26,7 +26,7 @@ function trekLayer({ id, maxLevel }) {
   })
 }
 
-function usgsWmsLayer(layerName, maxLevel = 14, minLevel = 4) {
+function usgsWmsLayer(layerName, maxLevel = 12, minLevel = 0) {
   return new Cesium.WebMapServiceImageryProvider({
     url: USGS_WMS,
     layers: layerName,
@@ -36,7 +36,7 @@ function usgsWmsLayer(layerName, maxLevel = 14, minLevel = 4) {
     maximumLevel: maxLevel,
     tileWidth: 512,
     tileHeight: 512,
-    credit: 'NASA / JPL / ASU / ESA · USGS Astrogeology (THEMIS 100m / HRSC)',
+    credit: 'NASA / JPL / ASU · USGS Astrogeology (THEMIS 100m)',
   })
 }
 
@@ -476,13 +476,13 @@ export default function App() {
   })
   const [preview, setPreview] = useState(null) // {title, sub, image, pia, text, lat, lon}
   const [checkedSteps, setCheckedSteps] = useState({})
-  const [intro, setIntro] = useState(() => !parseHashRoute())
-  const [sunlight, setSunlight] = useState(true)
-  const [showHazards, setShowHazards] = useState(true)
+  const [intro, setIntro] = useState(false)
+  const [sunlight, setSunlight] = useState(false)
+  const [showHazards, setShowHazards] = useState(false)
   const [replaying, setReplaying] = useState(false)
   const [audioOn, setAudioOn] = useState(false)
   const [copied, setCopied] = useState(false)
-  const [showOrbiters, setShowOrbiters] = useState(true)
+  const [showOrbiters, setShowOrbiters] = useState(false)
   const [rideOrb, setRideOrb] = useState(null) // null | 'MRO' | 'TGO' | 'ODY'
   const [timeRate, setTimeRate] = useState(1) // 1 | 60 | 300
   const [envMode, setEnvMode] = useState('nominal') // 'nominal' | 'dust' | 'spe'
@@ -799,25 +799,20 @@ export default function App() {
     }
   }, [route, routeData, profKey, showHazards, envMode, baseNodes.length])
 
-  // Real NASA Mars Trek WMTS base (zoom 0–7) + ESA HRSC 3D relief shading + 512px high-res 100m THEMIS detail up to zoom 14
+  // Base layer + high-resolution 100m THEMIS / HRSC detail overlay on zoom (exact crisp a800586 stack)
   useEffect(() => {
     const layers = viewerRef.current.imageryLayers
     layers.removeAll()
     const cfg = LAYERS[layer]
-    const base = layers.addImageryProvider(trekLayer(cfg))
-    base.contrast = 1.22
-    base.brightness = 1.02
-    base.saturation = 1.18
-    base.gamma = 0.95
-    if (cfg.relief) {
-      const relief = layers.addImageryProvider(usgsWmsLayer(cfg.relief, 13, 4))
-      relief.alpha = cfg.reliefAlpha
-      relief.contrast = 1.38
-    }
+    const base = layers.addImageryProvider(cfg.wms ? usgsWmsLayer(cfg.wms, cfg.maxLevel) : trekLayer(cfg))
+    base.contrast = 1.16
+    base.brightness = 1.03
+    base.saturation = 1.12
+    base.gamma = 0.96
     if (cfg.detail) {
-      const hiRes = layers.addImageryProvider(usgsWmsLayer(cfg.detail, 14, cfg.detailMin))
-      hiRes.alpha = cfg.detailAlpha
-      hiRes.contrast = 1.36
+      const hiRes = layers.addImageryProvider(usgsWmsLayer(cfg.detail, 12, 5))
+      hiRes.alpha = cfg.wms ? 0.55 : 0.38
+      hiRes.contrast = 1.35
     }
   }, [layer])
 
@@ -961,6 +956,12 @@ export default function App() {
     const mode = tab === 'base' ? 'base' : 'eva'
     plannerModeRef.current = mode
     setPlannerMode(mode)
+    if (tab === 'sim') {
+      setShowOrbiters(true)
+    } else {
+      setShowOrbiters(false)
+      setRideOrb(null)
+    }
   }
   const selectBaseMod = code => {
     nextModRef.current = code
@@ -1209,7 +1210,7 @@ export default function App() {
 
   return (
     <>
-      <div ref={globeRef} className={`globe${(mars?.dust_season && sunlight) || envMode === 'dust' ? ' dust-haze' : ''}${envMode === 'spe' ? ' spe-haze' : ''}`} />
+      <div ref={globeRef} className={`globe${envMode === 'dust' ? ' dust-haze' : ''}${envMode === 'spe' ? ' spe-haze' : ''}`} />
 
       {intro && !visor && (
         <div className="intro-card" role="dialog" aria-label="Mission Briefing">
