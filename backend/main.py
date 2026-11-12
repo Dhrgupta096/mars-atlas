@@ -1,15 +1,17 @@
 """Run: uvicorn main:app --reload --port 8000"""
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.request import Request, urlopen
 from fastapi import FastAPI, Query, Response
 from fastapi.staticfiles import StaticFiles
 from mars_time import mars_time
-from terrain import elevation, slope, risk, render_mola_tile
+from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap
 from route import straight_line, safest_path, science_path, eva_plan, slope_hazards
 from rovers import ROVERS
 from water import water_sites, water_at
 
 app = FastAPI(title="Mars Map API")
+_CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "tile_cache"
 
 # (name, lat, lon east-positive, kind)
 # ponytail: hand-picked list; replace with full USGS Gazetteer (~2k features) via a data script on day 5
@@ -79,6 +81,47 @@ def tile(mode: str, z: int, y: int, x: int):
         content=render_mola_tile(mode, max(0, min(z, 10)), y, x),
         media_type="image/png",
         headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/api/heightmap/{z}/{y}/{x}.bin")
+def heightmap(z: int, y: int, x: int):
+    return Response(
+        content=render_mola_heightmap(max(0, min(z, 8)), y, x),
+        media_type="application/octet-stream",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
+
+
+@app.get("/api/trek/{layer}/{z}/{y}/{x}.jpg")
+def trek_tile(layer: str, z: int, y: int, x: int):
+    z = max(0, min(z, 7))
+    cache_file = _CACHE_DIR / layer / str(z) / str(y) / f"{x}.jpg"
+    if cache_file.is_file():
+        return Response(
+            content=cache_file.read_bytes(),
+            media_type="image/jpeg",
+            headers={"Cache-Control": "public, max-age=604800"},
+        )
+    url = f"https://trek.nasa.gov/tiles/Mars/EQ/{layer}/1.0.0/default/default028mm/{z}/{y}/{x}.jpg"
+    try:
+        req = Request(url, headers={"User-Agent": "MarsAtlas/1.0"})
+        with urlopen(req, timeout=8) as resp:
+            data = resp.read()
+        if data[:2] == b"\xff\xd8":
+            cache_file.parent.mkdir(parents=True, exist_ok=True)
+            cache_file.write_bytes(data)
+            return Response(
+                content=data,
+                media_type="image/jpeg",
+                headers={"Cache-Control": "public, max-age=604800"},
+            )
+    except Exception:
+        pass
+    return Response(
+        content=render_mola_tile("themis", z, y, x),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=3600"},
     )
 
 

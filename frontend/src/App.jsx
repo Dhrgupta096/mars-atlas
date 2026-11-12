@@ -5,7 +5,6 @@ import gsap from 'gsap'
 const MARS = Cesium.Ellipsoid.MARS
 Cesium.Ellipsoid.default = MARS
 
-const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ/'
 const USGS_WMS = 'https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/mars_simp_cyl.map'
 const LAYERS = {
   Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'THEMIS' },
@@ -18,11 +17,42 @@ const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d'
 const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
 
 function trekLayer({ id, maxLevel }) {
-  return new Cesium.WebMapTileServiceImageryProvider({
-    url: `${TREK}${id}/1.0.0/default/default028mm/{TileMatrix}/{TileRow}/{TileCol}.jpg`,
-    layer: id, style: 'default', tileMatrixSetID: 'default028mm',
+  return new Cesium.UrlTemplateImageryProvider({
+    url: `/api/trek/${id}/{z}/{y}/{x}.jpg`,
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
-    maximumLevel: maxLevel, credit: 'NASA / JPL-Caltech · Mars Trek',
+    maximumLevel: maxLevel,
+    tileWidth: 256,
+    tileHeight: 256,
+    credit: 'NASA / JPL-Caltech · Mars Trek (Local Disk Cache)',
+  })
+}
+
+const _hmapCache = new Map()
+function createMolaTerrainProvider(scale = 2.0) {
+  return new Cesium.CustomHeightmapTerrainProvider({
+    width: 33,
+    height: 33,
+    tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
+    credit: 'NASA MGS MOLA 32ppd 3D Mesh',
+    callback: (x, y, level) => {
+      const z = Math.min(level, 7)
+      const key = `${z}/${y}/${x}`
+      const p = _hmapCache.get(key) ?? fetch(`/api/heightmap/${z}/${y}/${x}.bin`)
+        .then(r => (r.ok ? r.arrayBuffer() : new ArrayBuffer(33 * 33 * 4)))
+        .then(buf => {
+          const arr = new Float32Array(buf)
+          _hmapCache.set(key, arr)
+          return arr
+        })
+        .catch(() => new Float32Array(33 * 33))
+      if (!_hmapCache.has(key)) _hmapCache.set(key, p)
+      return Promise.resolve(p).then(base => {
+        if (scale === 1.0) return base
+        const scaled = new Float32Array(base.length)
+        for (let i = 0; i < base.length; i++) scaled[i] = base[i] * scale
+        return scaled
+      })
+    },
   })
 }
 
@@ -106,8 +136,9 @@ const MODE_LABEL = { walk: 'EVA · Walk OK', rover: 'EVA · Rover Needed', exped
 const MODE_COLOR = { walk: '#5fd38d', rover: '#f2c14e', expedition: '#e2572b', none: '#e5484d' }
 const ROUTE_COLOR = { direct: '#e8e0d6', safe: '#5fd38d', science: '#f2c14e' }
 const EYE_OFFSET = new Cesium.Cartesian3(0, 0, -3000) // 3 km toward camera: prevents local surface clipping while Mars (R=3396 km) hides far-side points
-const surfPos = (lon, lat) => Cesium.Cartesian3.fromDegrees(lon, lat, 400)
-const surfLine = pairs => Cesium.Cartesian3.fromDegreesArrayHeights(pairs.flatMap(([la, lo]) => [lo, la, 400]))
+const surfPos = (lon, lat) => Cesium.Cartesian3.fromDegrees(lon, lat, 0)
+const surfLine = pairs => Cesium.Cartesian3.fromDegreesArrayHeights(pairs.flatMap(([la, lo]) => [lo, la, 0]))
+const CLAMP_GND = Cesium.HeightReference.CLAMP_TO_GROUND
 const HOME = Cesium.Cartesian3.fromDegrees(-60, 0, 1.4e7)
 const glide = (camera, destination) => camera.flyTo({ destination, duration: 2.8, easingFunction: Cesium.EasingFunction.QUINTIC_IN_OUT })
 const CARDINAL = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
@@ -302,7 +333,7 @@ function syncBaseLayer(ref, nodes) {
     ents.add({
       polyline: {
         positions: surfLine(nodes.map(n => [n.lat, n.lon])),
-        width: 3.5, arcType: Cesium.ArcType.GEODESIC,
+        width: 3.5, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
         material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString('#7fd1c7'), glowPower: 0.25 }),
       },
     })
@@ -312,14 +343,8 @@ function syncBaseLayer(ref, nodes) {
     const col = Cesium.Color.fromCssColorString(mod.color)
     const isEven = idx % 2 === 0
     ents.add({
-      polyline: {
-        positions: Cesium.Cartesian3.fromDegreesArrayHeights([n.lon, n.lat, 400, n.lon, n.lat, 1800]),
-        width: 2.2, arcType: Cesium.ArcType.NONE, material: col.withAlpha(0.88),
-      },
-    })
-    ents.add({
-      position: Cesium.Cartesian3.fromDegrees(n.lon, n.lat, 1800),
-      point: { pixelSize: 10, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+      position: surfPos(n.lon, n.lat),
+      point: { pixelSize: 10, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
       label: {
         text: `#${idx + 1} ${mod.code}${n.elevation_m !== undefined ? ` · ${n.elevation_m.toLocaleString()}m` : ''}`,
         font: '600 10px "JetBrains Mono", ui-monospace, monospace',
@@ -327,6 +352,7 @@ function syncBaseLayer(ref, nodes) {
         horizontalOrigin: isEven ? Cesium.HorizontalOrigin.LEFT : Cesium.HorizontalOrigin.RIGHT,
         fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
         distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 3.5e5),
+        heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
         eyeOffset: EYE_OFFSET,
       },
     })
@@ -501,6 +527,7 @@ export default function App() {
   const [leftTab, setLeftTab] = useState('explore') // 'explore' | 'sim' | 'base'
   const [overlaysOpen, setOverlaysOpen] = useState(false)
   const [cleanUi, setCleanUi] = useState(false)
+  const [terrain3d, setTerrain3d] = useState(2) // 0 = Flat, 1 = 1x MOLA 3D, 2 = 2x MOLA 3D, 3 = 3x MOLA 3D
   const [baseNodes, setBaseNodes] = useState([])
   const [nextMod, setNextMod] = useState('HAB-1')
   const plannerModeRef = useRef('eva')
@@ -572,13 +599,14 @@ export default function App() {
     // Click 1 → start pin A, click 2 → destination pin B, click 3 → start over (or drop Base Module in 'base' mode)
     const makePin = (letter, below = false) => Object.assign(viewer.entities.add({
       show: false,
-      point: { pixelSize: 11, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+      point: { pixelSize: 11, outlineColor: Cesium.Color.WHITE, outlineWidth: 2, heightReference: CLAMP_GND, disableDepthTestDistance: 1.5e6 },
       label: {
         font: '600 11px "JetBrains Mono", ui-monospace, monospace',
         pixelOffset: new Cesium.Cartesian2(0, below ? 16 : -16),
         verticalOrigin: below ? Cesium.VerticalOrigin.TOP : Cesium.VerticalOrigin.BOTTOM,
         fillColor: Cesium.Color.WHITE,
         showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+        heightReference: CLAMP_GND, disableDepthTestDistance: 1.5e6,
         eyeOffset: EYE_OFFSET,
       },
     }), { letter })
@@ -597,7 +625,8 @@ export default function App() {
       setIntro(false)
       setReplaying(false)
       setRideOrb(null)
-      const c = camera.pickEllipsoid(e.position, MARS)
+      const ray = camera.getPickRay(e.position)
+      const c = (ray && scene.globe.pick(ray, scene)) || camera.pickEllipsoid(e.position, MARS)
       if (!c) return
       const g = MARS.cartesianToCartographic(c)
       const lat = Cesium.Math.toDegrees(g.latitude), lon = Cesium.Math.toDegrees(g.longitude)
@@ -679,7 +708,7 @@ export default function App() {
       })
       ents.add({
         polyline: {
-          positions: surfLine(ring), width: 1.8, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(ring), width: 1.8, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
           material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.8), dashLength: 10 }),
         },
       })
@@ -690,6 +719,7 @@ export default function App() {
           pixelOffset: new Cesium.Cartesian2(0, -6), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.8e5),
+          heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -705,8 +735,8 @@ export default function App() {
       ents.add({
         wall: {
           positions: Cesium.Cartesian3.fromDegreesArray(act.path.flatMap(([la, lo]) => [lo, la])),
-          minimumHeights: act.profile_m.map(() => 400),
-          maximumHeights: act.profile_m.map(h => 480 + ((h - pMin) / pSpan) * 1800),
+          minimumHeights: act.profile_m.map(h => h * terrain3d),
+          maximumHeights: act.profile_m.map(h => h * terrain3d + 160 + ((h - pMin) / pSpan) * 1400),
           material: wCol.withAlpha(0.2),
           outline: true,
           outlineColor: wCol.withAlpha(0.6),
@@ -715,27 +745,28 @@ export default function App() {
     }
     ents.add({
       polyline: {
-        positions: surfLine(direct.path), width: profKey === 'direct' ? 4 : 2, arcType: Cesium.ArcType.GEODESIC,
+        positions: surfLine(direct.path), width: profKey === 'direct' ? 4 : 2, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
         material: new Cesium.PolylineDashMaterialProperty({ color: Cesium.Color.fromCssColorString('#e8e0d6').withAlpha(profKey === 'direct' ? 0.95 : 0.55), dashLength: 12 }),
       },
     })
     const stCol = Cesium.Color.fromCssColorString(RISK_COLOR[direct.risk])
     ents.add({
       position: surfPos(direct.max_slope_at.lon, direct.max_slope_at.lat),
-      point: { pixelSize: 7, color: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+      point: { pixelSize: 7, color: stCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
       label: {
         show: profKey === 'direct',
         text: `▲ ${direct.max_slope_deg}° MAX`, font: '600 10px "JetBrains Mono", ui-monospace, monospace',
         pixelOffset: new Cesium.Cartesian2(12, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
         fillColor: stCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
         distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, maxLabelDist),
+        heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
         eyeOffset: EYE_OFFSET,
       },
     })
     if (safe) {
       ents.add({
         polyline: {
-          positions: surfLine(safe.path), width: profKey === 'safe' ? 6.5 : 4, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(safe.path), width: profKey === 'safe' ? 6.5 : 4, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
           material: new Cesium.PolylineGlowMaterialProperty({ color: Cesium.Color.fromCssColorString(RISK_COLOR.safe), glowPower: profKey === 'safe' ? 0.32 : 0.18 }),
         },
       })
@@ -744,7 +775,7 @@ export default function App() {
       const gold = Cesium.Color.fromCssColorString('#f2c14e')
       ents.add({
         polyline: {
-          positions: surfLine(science.path), width: profKey === 'science' ? 6.5 : 4, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(science.path), width: profKey === 'science' ? 6.5 : 4, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
           material: new Cesium.PolylineGlowMaterialProperty({ color: gold, glowPower: profKey === 'science' ? 0.32 : 0.18 }),
         },
       })
@@ -752,7 +783,7 @@ export default function App() {
         const isEven = idx % 2 === 0
         ents.add({
           position: surfPos(st.lon, st.lat),
-          point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2 },
+          point: { pixelSize: 9, color: gold, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
           label: {
             show: profKey === 'science',
             text: `${st.id} · ${st.kind.toUpperCase()}`, font: '600 10px "JetBrains Mono", ui-monospace, monospace',
@@ -760,6 +791,7 @@ export default function App() {
             horizontalOrigin: isEven ? Cesium.HorizontalOrigin.LEFT : Cesium.HorizontalOrigin.RIGHT,
             fillColor: gold, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, maxLabelDist),
+            heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
             eyeOffset: EYE_OFFSET,
           },
         })
@@ -770,12 +802,13 @@ export default function App() {
       const shCol = Cesium.Color.fromCssColorString(envMode === 'spe' ? '#e5484d' : '#f2c14e')
       ents.add({
         position: surfPos(em.shelter_lon, em.shelter_lat),
-        point: { pixelSize: 11, color: shCol, outlineColor: Cesium.Color.WHITE, outlineWidth: 2 },
+        point: { pixelSize: 11, color: shCol, outlineColor: Cesium.Color.WHITE, outlineWidth: 2, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
         label: {
           text: `[SHELTER · ${em.shield_pct}% SHIELD]`,
           font: '600 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -16), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: shCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+          heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -791,24 +824,25 @@ export default function App() {
         })
         ents.add({
           polyline: {
-            positions: surfLine(hRing), width: 1.6, arcType: Cesium.ArcType.GEODESIC,
+            positions: surfLine(hRing), width: 1.6, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
             material: new Cesium.PolylineDashMaterialProperty({ color: hCol.withAlpha(0.75), dashLength: 8 }),
           },
         })
         ents.add({
           position: surfPos(hz.lon, hz.lat),
-          point: { pixelSize: 6, color: hCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+          point: { pixelSize: 6, color: hCol, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
           label: {
             text: `HAZARD ${hz.slope_deg}°`, font: '500 9px "JetBrains Mono", ui-monospace, monospace',
             pixelOffset: new Cesium.Cartesian2(0, -10), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
             fillColor: hCol, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 2.2e5),
+            heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
             eyeOffset: EYE_OFFSET,
           },
         })
       }
     }
-  }, [route, routeData, profKey, showHazards, envMode, baseNodes.length])
+  }, [route, routeData, profKey, showHazards, envMode, baseNodes.length, terrain3d])
 
   // Persistent zero-lag imagery stack (never calls removeAll(); local MOLA tiles render in <2ms so Mars never shows blank quadrants)
   useEffect(() => {
@@ -849,6 +883,15 @@ export default function App() {
     themisHiRes.show = layer !== 'Elevation'
   }, [layer])
 
+  // 3D MOLA Terrain Mesh toggle (0 = Flat Ellipsoid, 1..3 = 1x..3x Real MOLA 3D Elevation Mesh)
+  useEffect(() => {
+    const v = viewerRef.current
+    if (!v) return
+    v.terrainProvider = terrain3d > 0
+      ? createMolaTerrainProvider(terrain3d)
+      : new Cesium.EllipsoidTerrainProvider({ ellipsoid: MARS })
+  }, [terrain3d])
+
   // Places → markers
   useEffect(() => {
     getJson('/api/places').then(setPlaces).catch(() => {})
@@ -870,19 +913,20 @@ export default function App() {
       })
       ents.add({
         polyline: {
-          positions: surfLine(ring), width: 2, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(ring), width: 2, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
           material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.75), dashLength: 12 }),
         },
       })
       ents.add({
         position: surfPos(w.lon, w.lat),
-        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+        point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
         label: {
           text: `[H2O] ${w.name.toUpperCase()} · ${w.yield.toUpperCase()}`,
           font: '500 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
           fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 7e6),
+          heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -897,20 +941,21 @@ export default function App() {
       const col = Cesium.Color.fromCssColorString(rv.color)
       ents.add({
         polyline: {
-          positions: surfLine(rv.path), width: 3, arcType: Cesium.ArcType.GEODESIC,
+          positions: surfLine(rv.path), width: 3, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
           material: new Cesium.PolylineGlowMaterialProperty({ color: col, glowPower: 0.2 }),
         },
       })
       for (const wp of rv.waypoints) {
         ents.add({
           position: surfPos(wp.lon, wp.lat),
-          point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5 },
+          point: { pixelSize: 7, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND, disableDepthTestDistance: 8e5 },
           label: {
             text: `${rv.name.toUpperCase()} · ${wp.label.toUpperCase()}`,
             font: '500 10px "JetBrains Mono", ui-monospace, monospace',
             pixelOffset: new Cesium.Cartesian2(8, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
             fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
             distanceDisplayCondition: new Cesium.DistanceDisplayCondition(0, 1.6e5),
+            heightReference: CLAMP_GND, disableDepthTestDistance: 8e5,
             eyeOffset: EYE_OFFSET,
           },
         })
@@ -923,13 +968,14 @@ export default function App() {
     for (const p of places) {
       ents.add({
         position: surfPos(p.lon, p.lat),
-        point: { pixelSize: 6, color: Cesium.Color.fromCssColorString(KIND_COLOR[p.kind]), outlineColor: Cesium.Color.BLACK, outlineWidth: 1 },
+        point: { pixelSize: 6, color: Cesium.Color.fromCssColorString(KIND_COLOR[p.kind]), outlineColor: Cesium.Color.BLACK, outlineWidth: 1, heightReference: CLAMP_GND, disableDepthTestDistance: 1.2e6 },
         label: {
           text: p.name.toUpperCase(), font: '500 10px "JetBrains Mono", ui-monospace, monospace',
           pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
           fillColor: Cesium.Color.fromCssColorString('#e8e0d6'),
           showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
           distanceDisplayCondition: new Cesium.DistanceDisplayCondition(3e5, 8.5e6),
+          heightReference: CLAMP_GND, disableDepthTestDistance: 1.2e6,
           eyeOffset: EYE_OFFSET,
         },
       })
@@ -1092,7 +1138,18 @@ export default function App() {
   const flyTo = p => {
     setQuery('')
     setVisor(false)
-    glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 350000))
+    const cam = viewerRef.current?.camera
+    if (!cam) return
+    if (terrain3d > 0 && ['volcano', 'canyon', 'crater', 'basin'].includes(p.kind)) {
+      cam.flyTo({
+        destination: Cesium.Cartesian3.fromDegrees(p.lon, p.lat - 2.2, 165000),
+        orientation: { heading: 0, pitch: Cesium.Math.toRadians(-38), roll: 0 },
+        duration: 2.6,
+        easingFunction: Cesium.EasingFunction.QUINTIC_IN_OUT,
+      })
+    } else {
+      glide(cam, Cesium.Cartesian3.fromDegrees(p.lon, p.lat, 350000))
+    }
   }
   const goHome = () => {
     setQuery('')
@@ -1128,10 +1185,11 @@ export default function App() {
       const [pLat, pLon] = pts[Math.max(idx - 1, 0)]
       const hdg = idx < total - 1 ? bearingDeg(lat, lon, nLat, nLon) : bearingDeg(pLat, pLon, lat, lon)
       const km = ((activeRoute.distance_m * (idx / (total - 1))) / 1000).toFixed(1)
+      const surfH = (prof[idx] ?? 0) * terrain3d
       setHoverIdx(idx)
       setHoverMarker(viewerRef, true, lon, lat, ROUTE_COLOR[profKey], `FLYOVER · ${km} km · ${prof[idx]?.toLocaleString()} m`)
       viewerRef.current?.camera.flyTo({
-        destination: Cesium.Cartesian3.fromDegrees(lon, lat, 14000),
+        destination: Cesium.Cartesian3.fromDegrees(lon, lat, Math.max(surfH + 14000, 2500)),
         orientation: { heading: Cesium.Math.toRadians(hdg), pitch: Cesium.Math.toRadians(-32), roll: 0 },
         duration: 1.15,
         easingFunction: Cesium.EasingFunction.LINEAR_NONE,
@@ -1145,7 +1203,7 @@ export default function App() {
     }
     stepFly()
     return () => { if (timer) clearTimeout(timer) }
-  }, [replaying, activeRoute, profKey, visor])
+  }, [replaying, activeRoute, profKey, visor, terrain3d])
   const vIdx = Math.min(visorIdx, Math.max(pathLen - 1, 0))
   const [vLat, vLon] = activeRoute ? activeRoute.path[vIdx] : (route.length ? [route[0].lat, route[0].lon] : [visorAnchor.lat, visorAnchor.lon])
   const vFrac = activeRoute ? vIdx / Math.max(pathLen - 1, 1) : 0
@@ -1175,8 +1233,9 @@ export default function App() {
     const prevPt = path ? path[Math.max(vIdx - 1, 0)] : null
     const hdg = path && vIdx < path.length - 1 ? bearingDeg(vLat, vLon, nextPt[0], nextPt[1])
       : (path && path.length > 1 ? bearingDeg(prevPt[0], prevPt[1], vLat, vLon) : 65)
+    const surfH = (vElev ?? 0) * terrain3d
     v.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 1800),
+      destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, surfH + 1800),
       orientation: { heading: Cesium.Math.toRadians(hdg), pitch: Cesium.Math.toRadians(-14), roll: 0 },
       duration: 1.1,
     })
@@ -1187,7 +1246,7 @@ export default function App() {
     } else {
       setHoverMarker(viewerRef, false)
     }
-  }, [visor, vIdx, vLat, vLon, activeRoute, profKey])
+  }, [visor, vIdx, vLat, vLon, vElev, activeRoute, profKey, terrain3d])
 
   useEffect(() => {
     const onKey = e => {
@@ -1909,6 +1968,13 @@ export default function App() {
         {Object.keys(LAYERS).map(k => (
           <button key={k} aria-pressed={layer === k} onClick={() => setLayer(k)}>{k}</button>
         ))}
+        <button
+          aria-pressed={terrain3d > 0}
+          onClick={() => setTerrain3d(t => (t + 1) % 4)}
+          title="Cycle real 3D MOLA terrain mesh exaggeration (2x -> 3x -> Off -> 1x)"
+        >
+          {terrain3d > 0 ? `3D Relief ${terrain3d}×` : '3D Relief Off'}
+        </button>
         <span className="navsep" aria-hidden="true" />
         <button aria-expanded={overlaysOpen} aria-pressed={overlaysOpen} onClick={() => setOverlaysOpen(o => !o)}>
           Overlays {overlaysOpen ? '▾' : '▴'}

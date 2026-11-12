@@ -74,6 +74,39 @@ def _encode_png(rgb: np.ndarray) -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(raw, level=1)) + chunk(b"IEND", b"")
 
 
+@lru_cache(maxsize=2048)
+def render_mola_heightmap(z: int, y: int, x: int, size: int = 33) -> bytes:
+    """Return a 33x33 float32 binary heightmap (in metres vs Mars areoid) for Cesium CustomHeightmapTerrainProvider."""
+    tiles_x = 2 << z
+    tiles_y = 1 << z
+    x = max(0, min(x, tiles_x - 1))
+    y = max(0, min(y, tiles_y - 1))
+    lat_n = 90.0 - (y / tiles_y) * 180.0
+    lat_s = 90.0 - ((y + 1) / tiles_y) * 180.0
+    lon_w = -180.0 + (x / tiles_x) * 360.0
+    lon_e = -180.0 + ((x + 1) / tiles_x) * 360.0
+
+    lats = np.linspace(lat_n, lat_s, size)
+    lons = np.linspace(lon_w, lon_e, size)
+    r_flt = np.clip((90.0 - lats) * PPD, 0, DEM.shape[0] - 1.001)
+    c_flt = (lons % 360.0) * PPD
+
+    r0 = r_flt.astype(np.int32)
+    r1 = np.minimum(r0 + 1, DEM.shape[0] - 1)
+    dr = (r_flt - r0)[:, None]
+
+    c0 = c_flt.astype(np.int32) % DEM.shape[1]
+    c1 = (c0 + 1) % DEM.shape[1]
+    dc = (c_flt - np.floor(c_flt))[None, :]
+
+    z00 = DEM[r0[:, None], c0[None, :]].astype(np.float32)
+    z01 = DEM[r0[:, None], c1[None, :]].astype(np.float32)
+    z10 = DEM[r1[:, None], c0[None, :]].astype(np.float32)
+    z11 = DEM[r1[:, None], c1[None, :]].astype(np.float32)
+    grid = (1 - dr) * ((1 - dc) * z00 + dc * z01) + dr * ((1 - dc) * z10 + dc * z11)
+    return grid.astype("<f4").tobytes()
+
+
 @lru_cache(maxsize=1024)
 def render_mola_tile(mode: str, z: int, y: int, x: int, size: int = 256) -> bytes:
     """Render a 256x256 GeographicTilingScheme (z, y, x) tile directly from local MOLA 32ppd DEM in ~2 ms."""
@@ -95,29 +128,44 @@ def render_mola_tile(mode: str, z: int, y: int, x: int, size: int = 256) -> byte
     r0 = r_flt.astype(np.int32)
     r1 = np.minimum(r0 + 1, DEM.shape[0] - 1)
     dr = (r_flt - r0)[:, None]
+    # Smoothstep (Hermite S-curve) sub-pixel interpolation for sharper ridges and zero blocky DEM grid artifacts
+    sr = dr * dr * (3.0 - 2.0 * dr)
 
     c0 = c_flt.astype(np.int32) % DEM.shape[1]
     c1 = (c0 + 1) % DEM.shape[1]
     dc = (c_flt - np.floor(c_flt))[None, :]
+    sc = dc * dc * (3.0 - 2.0 * dc)
 
     z00 = DEM[r0[:, None], c0[None, :]].astype(np.float32)
     z01 = DEM[r0[:, None], c1[None, :]].astype(np.float32)
     z10 = DEM[r1[:, None], c0[None, :]].astype(np.float32)
     z11 = DEM[r1[:, None], c1[None, :]].astype(np.float32)
-    grid = (1 - dr) * ((1 - dc) * z00 + dc * z01) + dr * ((1 - dc) * z10 + dc * z11)
+    grid = (1 - sr) * ((1 - sc) * z00 + sc * z01) + sr * ((1 - sc) * z10 + sc * z11)
 
     h = grid[1:-1, 1:-1]
     step_deg = max((lat_n - lat_s) / size, 1e-4)
     step_m = step_deg * (3396000.0 * np.pi / 180.0)
-    dzdx = (grid[1:-1, 2:] - grid[1:-1, :-2]) / (2.0 * step_m)
+    cos_lat = np.maximum(np.cos(np.radians(lats[1:-1])), 0.08)[:, None]
+    dzdx = (grid[1:-1, 2:] - grid[1:-1, :-2]) / (2.0 * step_m * cos_lat)
     dzdy = (grid[:-2, 1:-1] - grid[2:, 1:-1]) / (2.0 * step_m)
+    lap = (grid[:-2, 1:-1] + grid[2:, 1:-1] + grid[1:-1, :-2] + grid[1:-1, 2:] - 4.0 * h) / step_m
 
-    exag = 4.5 if mode == "themis" else 3.5
+    exag = 5.2 if mode == "themis" else 4.0
     nx, ny, nz = -dzdx * exag, -dzdy * exag, np.ones_like(h)
     norm = np.sqrt(nx * nx + ny * ny + nz * nz)
-    # NW illumination (azimuth 315°, altitude 38°)
-    shade = (-0.55 * nx + 0.55 * ny + 0.62 * nz) / norm
-    shade = np.clip(0.32 + 0.82 * shade, 0.22, 1.18)[:, :, None]
+    # Multi-azimuth relief: primary NW sun (315°) + secondary NE fill (45°) + steep slope darkening + ridge/canyon curvature
+    shade_nw = (-0.58 * nx + 0.58 * ny + 0.57 * nz) / norm
+    shade_ne = (0.45 * nx + 0.45 * ny + 0.77 * nz) / norm
+    slope_mag = np.hypot(dzdx, dzdy)
+    curv = np.clip(-lap * 0.035, -0.10, 0.10)
+    shade = 0.28 + 0.68 * shade_nw + 0.22 * shade_ne - np.clip(slope_mag * 0.22, 0.0, 0.16) + curv
+    if z >= 5:
+        # Procedural high-frequency Martian regolith micro-relief at close zoom
+        lat_g = lats[1:-1, None] * 180.0
+        lon_g = lons[None, 1:-1] * 180.0
+        grain = np.sin(lat_g * 2.3 + lon_g * 1.9) * np.cos(lat_g * 3.7 - lon_g * 2.9) * 0.028
+        shade = shade + grain
+    shade = np.clip(shade, 0.18, 1.22)[:, :, None]
 
     knots, pal = (_ELEV_H, _ELEV_RGB) if mode == "elevation" else (_RUST_H, _RUST_RGB)
     rgb = np.empty((size, size, 3), dtype=np.float32)

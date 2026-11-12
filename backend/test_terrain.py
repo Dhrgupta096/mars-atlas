@@ -1,5 +1,5 @@
 """Run: python test_terrain.py  (checks MOLA heights against published values)"""
-from terrain import elevation, slope, risk, render_mola_tile
+from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap
 
 assert abs(elevation(-4.59, 137.44) - (-4501)) < 100      # Curiosity landing site, published -4,501 m
 assert elevation(18.65, -133.8) > 19000                   # Olympus Mons summit region
@@ -15,4 +15,6 @@ assert [risk(5), risk(15), risk(30)] == ["safe", "caution", "too steep"]
 for m in ("elevation", "themis"):
     png = render_mola_tile(m, 1, 0, 0)
     assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 2000
+hmap = render_mola_heightmap(1, 0, 0)
+assert len(hmap) == 33 * 33 * 4
 print("all terrain checks passed")
