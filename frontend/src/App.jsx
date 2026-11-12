@@ -12,7 +12,6 @@ const LAYERS = {
   'THEMIS 100m': { wms: 'MOLA_THEMIS_blend', maxLevel: 12, detail: 'THEMIS' },
   Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade' },
 }
-const KIND_COLOR = { rover: '#7fd1c7', lander: '#7fd1c7', ice: '#f2f0ea', volcano: '#e2572b', crater: '#d9b26f', canyon: '#d9b26f', basin: '#d9b26f', plain: '#d9b26f' }
 const EARTH_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d' }
 const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
@@ -553,8 +552,6 @@ export default function App() {
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#6c311b')
     scene.screenSpaceCameraController.minimumZoomDistance = 600
     viewerRef.current = viewer
-    viewer.placesLayer = new Cesium.CustomDataSource('places')
-    viewer.dataSources.add(viewer.placesLayer)
     viewer.routeLayer = new Cesium.CustomDataSource('route')
     viewer.dataSources.add(viewer.routeLayer)
     viewer.roversLayer = new Cesium.CustomDataSource('rovers')
@@ -686,7 +683,6 @@ export default function App() {
   // Render walk-back rings, VHF comm horizon, 3D route lines, 3D terrain curtain wall, 3D vertical station beacons, and MOLA slope hazard zones
   useEffect(() => {
     const v = viewerRef.current
-    if (v?.placesLayer) v.placesLayer.show = route.length === 0 && baseNodes.length === 0
     const ents = v.routeLayer.entities
     ents.removeAll()
     setHoverMarker(viewerRef, false)
@@ -961,25 +957,6 @@ export default function App() {
       }
     }
   }, [rovers, showRovers])
-  useEffect(() => {
-    const ents = viewerRef.current.placesLayer.entities
-    ents.removeAll()
-    for (const p of places) {
-      ents.add({
-        position: surfPos(p.lon, p.lat),
-        point: { pixelSize: 6, color: Cesium.Color.fromCssColorString(KIND_COLOR[p.kind]), outlineColor: Cesium.Color.BLACK, outlineWidth: 1.5, heightReference: CLAMP_GND },
-        label: {
-          text: p.name.toUpperCase(), font: '600 10px "JetBrains Mono", ui-monospace, monospace',
-          pixelOffset: new Cesium.Cartesian2(10, 0), horizontalOrigin: Cesium.HorizontalOrigin.LEFT,
-          fillColor: Cesium.Color.fromCssColorString('#f2f0ea'),
-          showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
-          distanceDisplayCondition: new Cesium.DistanceDisplayCondition(2e5, 2.2e7),
-          heightReference: CLAMP_GND,
-          eyeOffset: EYE_OFFSET,
-        },
-      })
-    }
-  }, [places])
 
   // Live or simulated clocks: Earth ticks locally (or holds planned EVA date), Mars comes from Python backend
   // ponytail: polls once a second when LIVE; switch to a websocket if we add many live feeds
@@ -1385,12 +1362,6 @@ export default function App() {
                   </ul>
                 ) : (
                   <div className="quickhub">
-                    <label>Featured Landmarks</label>
-                    <div className="chipgrid">
-                      {places.filter(p => ['Jezero Crater', 'Gale Crater', 'Olympus Mons', 'Valles Marineris'].includes(p.name)).map(p => (
-                        <button key={p.name} onClick={() => flyTo(p)}>{p.name.replace(/ \(.*\)/, '')}</button>
-                      ))}
-                    </div>
                     <label>1-Click EVA Missions</label>
                     <div className="evacards">
                       {PRESET_EVAS.map(p => (
