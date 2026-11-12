@@ -26,7 +26,18 @@ function trekLayer({ id, maxLevel }) {
   })
 }
 
-function usgsWmsLayer(layerName, maxLevel = 12, minLevel = 0) {
+function localTileLayer(mode, maxLevel = 8) {
+  return new Cesium.UrlTemplateImageryProvider({
+    url: `/api/tiles/${mode}/{z}/{y}/{x}.png`,
+    tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
+    maximumLevel: maxLevel,
+    tileWidth: 256,
+    tileHeight: 256,
+    credit: 'NASA MGS MOLA 32ppd DEM (Local Instant Renderer)',
+  })
+}
+
+function usgsWmsLayer(layerName, maxLevel = 12, minLevel = 4) {
   return new Cesium.WebMapServiceImageryProvider({
     url: USGS_WMS,
     layers: layerName,
@@ -34,8 +45,8 @@ function usgsWmsLayer(layerName, maxLevel = 12, minLevel = 0) {
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
     minimumLevel: minLevel,
     maximumLevel: maxLevel,
-    tileWidth: 512,
-    tileHeight: 512,
+    tileWidth: 256,
+    tileHeight: 256,
     credit: 'NASA / JPL / ASU · USGS Astrogeology (THEMIS 100m)',
   })
 }
@@ -504,16 +515,16 @@ export default function App() {
       skyAtmosphere: false,
     })
     const { scene, camera } = viewer
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2)
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5)
     scene.postProcessStages.fxaa.enabled = true
     scene.moon = undefined
     tuneAtmosphere(viewer)
     scene.globe.depthTestAgainstTerrain = true
-    scene.globe.tileCacheSize = 1200
+    scene.globe.tileCacheSize = 1500
     scene.globe.preloadAncestors = true
     scene.globe.preloadSiblings = true
-    scene.globe.maximumScreenSpaceError = 1.0
-    scene.globe.baseColor = Cesium.Color.fromCssColorString('#2a1a12')
+    scene.globe.maximumScreenSpaceError = 1.6
+    scene.globe.baseColor = Cesium.Color.fromCssColorString('#6c311b')
     scene.screenSpaceCameraController.minimumZoomDistance = 600
     viewerRef.current = viewer
     viewer.placesLayer = new Cesium.CustomDataSource('places')
@@ -799,21 +810,43 @@ export default function App() {
     }
   }, [route, routeData, profKey, showHazards, envMode, baseNodes.length])
 
-  // Base layer + high-resolution 100m THEMIS / HRSC detail overlay on zoom (exact crisp a800586 stack)
+  // Persistent zero-lag imagery stack (never calls removeAll(); local MOLA tiles render in <2ms so Mars never shows blank quadrants)
   useEffect(() => {
-    const layers = viewerRef.current.imageryLayers
-    layers.removeAll()
-    const cfg = LAYERS[layer]
-    const base = layers.addImageryProvider(cfg.wms ? usgsWmsLayer(cfg.wms, cfg.maxLevel) : trekLayer(cfg))
-    base.contrast = 1.16
-    base.brightness = 1.03
-    base.saturation = 1.12
-    base.gamma = 0.96
-    if (cfg.detail) {
-      const hiRes = layers.addImageryProvider(usgsWmsLayer(cfg.detail, 12, 5))
-      hiRes.alpha = cfg.wms ? 0.55 : 0.38
-      hiRes.contrast = 1.35
+    const v = viewerRef.current
+    if (!v) return
+    const layers = v.imageryLayers
+    if (!v._marsLayers) {
+      const localRust = layers.addImageryProvider(localTileLayer('themis', 8))
+      localRust.contrast = 1.12
+      localRust.brightness = 1.02
+
+      const viking = layers.addImageryProvider(trekLayer(LAYERS.Imagery))
+      viking.contrast = 1.16
+      viking.brightness = 1.03
+      viking.saturation = 1.12
+      viking.gamma = 0.96
+
+      const localElev = layers.addImageryProvider(localTileLayer('elevation', 8))
+      localElev.contrast = 1.12
+      localElev.brightness = 1.02
+      localElev.saturation = 1.14
+
+      const themisBlend = layers.addImageryProvider(usgsWmsLayer('MOLA_THEMIS_blend', 12, 3))
+      themisBlend.alpha = 0.86
+      themisBlend.contrast = 1.18
+
+      const themisHiRes = layers.addImageryProvider(usgsWmsLayer('THEMIS', 12, 6))
+      themisHiRes.alpha = 0.42
+      themisHiRes.contrast = 1.32
+
+      v._marsLayers = { localRust, viking, localElev, themisBlend, themisHiRes }
     }
+    const { localRust, viking, localElev, themisBlend, themisHiRes } = v._marsLayers
+    localRust.show = true
+    viking.show = layer === 'Imagery'
+    localElev.show = layer === 'Elevation'
+    themisBlend.show = layer === 'THEMIS 100m'
+    themisHiRes.show = layer !== 'Elevation'
   }, [layer])
 
   // Places → markers
@@ -1296,7 +1329,7 @@ export default function App() {
                   <div className="quickhub">
                     <label>Featured Landmarks</label>
                     <div className="chipgrid">
-                      {places.filter(p => ['Jezero (Perseverance)', 'Gale (Curiosity)', 'Olympus Mons', 'Valles Marineris'].includes(p.name)).map(p => (
+                      {places.filter(p => ['Jezero Crater', 'Gale Crater', 'Olympus Mons', 'Valles Marineris'].includes(p.name)).map(p => (
                         <button key={p.name} onClick={() => flyTo(p)}>{p.name.replace(/ \(.*\)/, '')}</button>
                       ))}
                     </div>

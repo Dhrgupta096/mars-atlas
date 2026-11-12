@@ -1,10 +1,10 @@
 """Run: uvicorn main:app --reload --port 8000"""
 from datetime import datetime, timezone
 from pathlib import Path
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response
 from fastapi.staticfiles import StaticFiles
 from mars_time import mars_time
-from terrain import elevation, slope, risk
+from terrain import elevation, slope, risk, render_mola_tile
 from route import straight_line, safest_path, science_path, eva_plan, slope_hazards
 from rovers import ROVERS
 from water import water_sites, water_at
@@ -71,6 +71,15 @@ def rovers():
 @app.get("/api/water")
 def water():
     return water_sites()
+
+
+@app.get("/api/tiles/{mode}/{z}/{y}/{x}.png")
+def tile(mode: str, z: int, y: int, x: int):
+    return Response(
+        content=render_mola_tile(mode, max(0, min(z, 10)), y, x),
+        media_type="image/png",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 _DIST = Path(__file__).resolve().parent.parent / "frontend" / "dist"
