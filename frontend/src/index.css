@@ -235,9 +235,15 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .alertbar button:hover { border-color: var(--oxide); color: var(--oxide); }
 .alertbar ~ .hint { top: 102px; }
 
-.modeswitch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; margin-bottom: 6px; }
-.modeswitch button { all: unset; cursor: pointer; padding: 4px 6px; text-align: center; font: 600 9px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); }
+.modeswitch { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-bottom: 6px; }
+.modeswitch button { all: unset; cursor: pointer; padding: 4px 4px; text-align: center; font: 600 9px var(--mono); letter-spacing: .07em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); }
 .modeswitch button[aria-pressed="true"] { color: var(--basalt); background: var(--dust); border-color: var(--dust); }
+
+.cleanbtn { all: unset; pointer-events: auto; cursor: pointer; padding: 3px 8px; font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); background: rgba(232, 224, 214, 0.04); transition: border-color .2s, color .2s, background .2s; }
+.cleanbtn:hover, .cleanbtn[aria-pressed="true"] { border-color: var(--oxide); color: var(--basalt); background: var(--oxide); }
+
+.overlays-menu { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 3px; padding: 6px; min-width: 175px; background: rgba(15, 11, 10, 0.96); border: 1px solid var(--line); border-top: 2px solid var(--oxide); backdrop-filter: blur(12px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7); }
+.overlays-menu button { text-align: left; border: 1px solid var(--line); padding: 6px 9px; }
 
 .envsim { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
 .envbtns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; margin-top: 4px; }

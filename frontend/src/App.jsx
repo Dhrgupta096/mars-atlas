@@ -8,9 +8,9 @@ Cesium.Ellipsoid.default = MARS
 const TREK = 'https://trek.nasa.gov/tiles/Mars/EQ/'
 const USGS_WMS = 'https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/mars_simp_cyl.map'
 const LAYERS = {
-  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'THEMIS', detailMin: 6, detailAlpha: 0.42 },
-  'THEMIS 100m': { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'MOLA_THEMIS_blend', detailMin: 4, detailAlpha: 0.88 },
-  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade', detailMin: 5, detailAlpha: 0.48 },
+  Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, relief: 'HRSC_MOLA_Blend_Hillshade', reliefAlpha: 0.26, detail: 'THEMIS', detailMin: 5, detailAlpha: 0.64 },
+  'THEMIS 100m': { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, relief: 'THEMIS', reliefAlpha: 0.35, detail: 'MOLA_THEMIS_blend', detailMin: 4, detailAlpha: 0.92 },
+  Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade', detailMin: 4, detailAlpha: 0.58 },
 }
 const KIND_COLOR = { rover: '#7fd1c7', lander: '#7fd1c7', ice: '#f2f0ea', volcano: '#e2572b', crater: '#d9b26f', canyon: '#d9b26f', basin: '#d9b26f', plain: '#d9b26f' }
 const EARTH_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -26,7 +26,7 @@ function trekLayer({ id, maxLevel }) {
   })
 }
 
-function usgsWmsLayer(layerName, maxLevel = 11, minLevel = 5) {
+function usgsWmsLayer(layerName, maxLevel = 14, minLevel = 4) {
   return new Cesium.WebMapServiceImageryProvider({
     url: USGS_WMS,
     layers: layerName,
@@ -34,8 +34,8 @@ function usgsWmsLayer(layerName, maxLevel = 11, minLevel = 5) {
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
     minimumLevel: minLevel,
     maximumLevel: maxLevel,
-    tileWidth: 256,
-    tileHeight: 256,
+    tileWidth: 512,
+    tileHeight: 512,
     credit: 'NASA / JPL / ASU / ESA · USGS Astrogeology (THEMIS 100m / HRSC)',
   })
 }
@@ -484,10 +484,12 @@ export default function App() {
   const [copied, setCopied] = useState(false)
   const [showOrbiters, setShowOrbiters] = useState(true)
   const [rideOrb, setRideOrb] = useState(null) // null | 'MRO' | 'TGO' | 'ODY'
-  const [orbitOpen, setOrbitOpen] = useState(false)
   const [timeRate, setTimeRate] = useState(1) // 1 | 60 | 300
   const [envMode, setEnvMode] = useState('nominal') // 'nominal' | 'dust' | 'spe'
   const [plannerMode, setPlannerMode] = useState('eva') // 'eva' | 'base'
+  const [leftTab, setLeftTab] = useState('explore') // 'explore' | 'sim' | 'base'
+  const [overlaysOpen, setOverlaysOpen] = useState(false)
+  const [cleanUi, setCleanUi] = useState(false)
   const [baseNodes, setBaseNodes] = useState([])
   const [nextMod, setNextMod] = useState('HAB-1')
   const plannerModeRef = useRef('eva')
@@ -502,17 +504,17 @@ export default function App() {
       skyAtmosphere: false,
     })
     const { scene, camera } = viewer
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5)
+    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2)
     scene.postProcessStages.fxaa.enabled = true
     scene.moon = undefined
     tuneAtmosphere(viewer)
     scene.globe.depthTestAgainstTerrain = true
-    scene.globe.tileCacheSize = 1000
+    scene.globe.tileCacheSize = 1200
     scene.globe.preloadAncestors = true
     scene.globe.preloadSiblings = true
-    scene.globe.maximumScreenSpaceError = 1.35
+    scene.globe.maximumScreenSpaceError = 1.0
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#2a1a12')
-    scene.screenSpaceCameraController.minimumZoomDistance = 2000
+    scene.screenSpaceCameraController.minimumZoomDistance = 600
     viewerRef.current = viewer
     viewer.placesLayer = new Cesium.CustomDataSource('places')
     viewer.dataSources.add(viewer.placesLayer)
@@ -797,20 +799,25 @@ export default function App() {
     }
   }, [route, routeData, profKey, showHazards, envMode, baseNodes.length])
 
-  // Real NASA Mars Trek WMTS base (zoom 0–7) + high-resolution 100m THEMIS / HRSC detail overlay on deep zoom
+  // Real NASA Mars Trek WMTS base (zoom 0–7) + ESA HRSC 3D relief shading + 512px high-res 100m THEMIS detail up to zoom 14
   useEffect(() => {
     const layers = viewerRef.current.imageryLayers
     layers.removeAll()
     const cfg = LAYERS[layer]
     const base = layers.addImageryProvider(trekLayer(cfg))
-    base.contrast = 1.18
-    base.brightness = 1.03
-    base.saturation = 1.14
-    base.gamma = 0.96
+    base.contrast = 1.22
+    base.brightness = 1.02
+    base.saturation = 1.18
+    base.gamma = 0.95
+    if (cfg.relief) {
+      const relief = layers.addImageryProvider(usgsWmsLayer(cfg.relief, 13, 4))
+      relief.alpha = cfg.reliefAlpha
+      relief.contrast = 1.38
+    }
     if (cfg.detail) {
-      const hiRes = layers.addImageryProvider(usgsWmsLayer(cfg.detail, 11, cfg.detailMin))
+      const hiRes = layers.addImageryProvider(usgsWmsLayer(cfg.detail, 14, cfg.detailMin))
       hiRes.alpha = cfg.detailAlpha
-      hiRes.contrast = 1.32
+      hiRes.contrast = 1.36
     }
   }, [layer])
 
@@ -949,9 +956,11 @@ export default function App() {
     return () => ctx.revert()
   }, [])
 
-  const switchPlannerMode = m => {
-    plannerModeRef.current = m
-    setPlannerMode(m)
+  const switchLeftTab = tab => {
+    setLeftTab(tab)
+    const mode = tab === 'base' ? 'base' : 'eva'
+    plannerModeRef.current = mode
+    setPlannerMode(mode)
   }
   const selectBaseMod = code => {
     nextModRef.current = code
@@ -961,7 +970,9 @@ export default function App() {
     setIntro(false)
     setReplaying(false)
     setRideOrb(null)
-    switchPlannerMode('base')
+    setLeftTab('base')
+    plannerModeRef.current = 'base'
+    setPlannerMode('base')
     setBaseNodes(JEZERO_BASE_PRESET.map((n, i) => ({ ...n, id: `${n.code}-${i}` })))
     playQuindar(audioRef.current, 'Deploying five-module Jezero Crater surface outpost')
     glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(77.425, 18.475, 28000))
@@ -1145,14 +1156,16 @@ export default function App() {
   }, [visor, vIdx, vLat, vLon, activeRoute, profKey])
 
   useEffect(() => {
-    if (!visor) return
     const onKey = e => {
-      if (e.key === 'Escape') {
+      if (e.target?.tagName === 'INPUT') return
+      if (e.key === 'h' || e.key === 'H') {
+        setCleanUi(u => !u)
+      } else if (visor && e.key === 'Escape') {
         setVisor(false)
         viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
-      } else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+      } else if (visor && (e.key === 'ArrowRight' || e.key === 'ArrowUp')) {
         setVisorIdx(i => Math.min(i + 1, Math.max(pathLen - 1, 0)))
-      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+      } else if (visor && (e.key === 'ArrowLeft' || e.key === 'ArrowDown')) {
         setVisorIdx(i => Math.max(i - 1, 0))
       }
     }
@@ -1243,6 +1256,9 @@ export default function App() {
         <div className="brand">
           <button className="mark" onClick={goHome} aria-label="Back to full Mars view">MARS<span>/</span>ATLAS</button>
           <span className="missiontag">ORBITAL EVA PLANNER · MOLA 32PPD + THEMIS 100M</span>
+          <button className="cleanbtn" aria-pressed={cleanUi} onClick={() => setCleanUi(u => !u)} title="Hide side panels for full-screen Mars globe (Shortcut: H)">
+            {cleanUi ? 'Show UI [H]' : 'Clean Globe [H]'}
+          </button>
         </div>
         <dl className="clocks">
           <div>
@@ -1256,21 +1272,116 @@ export default function App() {
         </dl>
       </header>
 
+      {!cleanUi && (
       <div className="dock-left">
         {!visor && !cuff && (
           <section className="ui panel search">
-            <div className="modeswitch" role="group" aria-label="Mission Planner Mode">
-              <button aria-pressed={plannerMode === 'eva'} onClick={() => switchPlannerMode('eva')}>EVA Route (A→B)</button>
-              <button aria-pressed={plannerMode === 'base'} onClick={() => switchPlannerMode('base')}>Base Builder ({baseNodes.length})</button>
+            <div className="modeswitch" role="tablist" aria-label="Left Console Section">
+              <button role="tab" aria-pressed={leftTab === 'explore'} onClick={() => switchLeftTab('explore')}>Explore</button>
+              <button role="tab" aria-pressed={leftTab === 'sim'} onClick={() => switchLeftTab('sim')}>Orbit &amp; Sim</button>
+              <button role="tab" aria-pressed={leftTab === 'base'} onClick={() => switchLeftTab('base')}>Base ({baseNodes.length})</button>
             </div>
-            <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mars (Jezero, Olympus…)" autoComplete="off" />
-            {results.length > 0 ? (
-              <ul role="listbox" aria-label="Places">
-                {results.map(p => (
-                  <li key={p.name}><button onClick={() => flyTo(p)}><span>{p.name}</span><em>{p.kind}</em></button></li>
-                ))}
-              </ul>
-            ) : plannerMode === 'base' ? (
+
+            {leftTab === 'explore' && (
+              <>
+                <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mars (Jezero, Olympus…)" autoComplete="off" />
+                {results.length > 0 ? (
+                  <ul role="listbox" aria-label="Places">
+                    {results.map(p => (
+                      <li key={p.name}><button onClick={() => flyTo(p)}><span>{p.name}</span><em>{p.kind}</em></button></li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="quickhub">
+                    <label>Featured Landmarks</label>
+                    <div className="chipgrid">
+                      {places.filter(p => ['Jezero (Perseverance)', 'Gale (Curiosity)', 'Olympus Mons', 'Valles Marineris'].includes(p.name)).map(p => (
+                        <button key={p.name} onClick={() => flyTo(p)}>{p.name.replace(/ \(.*\)/, '')}</button>
+                      ))}
+                    </div>
+                    <label>1-Click EVA Missions</label>
+                    <div className="evacards">
+                      {PRESET_EVAS.map(p => (
+                        <button key={p.id} onClick={() => loadPreset(p)}>
+                          <span>{p.label}</span>
+                          <em>A → B</em>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {rovers.length > 0 && (
+                  <div className="rovers">
+                    <div className="rovhead">
+                      <button className="sectoggle" aria-expanded={roversOpen} onClick={() => setRoversOpen(o => !o)}>
+                        Rover Traverses ({rovers.length}) {roversOpen ? '▴' : '▾'}
+                      </button>
+                      <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
+                        {showRovers ? 'Shown' : 'Hidden'}
+                      </button>
+                    </div>
+                    {roversOpen && rovers.map(rv => (
+                      <div key={rv.name} className="rovcard">
+                        <button className="rovmain" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 32000))}>
+                          <span style={{ color: rv.color }}>● {rv.name}</span>
+                          <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
+                        </button>
+                        <div className="rovjumps">
+                          {rv.waypoints.map(wp => (
+                            <button
+                              key={wp.label}
+                              onClick={() => inspectStop({
+                                title: `${rv.name} · ${wp.label}`,
+                                sub: `${wp.elevation_m.toLocaleString()} m · ${rv.site}`,
+                                image: wp.image,
+                                pia: wp.pia,
+                                text: wp.caption,
+                                lat: wp.lat,
+                                lon: wp.lon,
+                              }, 18000)}
+                            >
+                              {wp.label === 'Quarter Traverse' ? '25%' : wp.label === 'Current Position' ? 'Now →' : wp.label}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
+
+            {leftTab === 'sim' && (
+              <div className="quickhub">
+                <label>Space Weather &amp; Dust Storm Sim</label>
+                <div className="envbtns" role="group" aria-label="Space Weather and Dust Storm Simulation">
+                  <button aria-pressed={envMode === 'nominal'} onClick={() => setEnvMode('nominal')}>Nominal</button>
+                  <button className="dustbtn" aria-pressed={envMode === 'dust'} onClick={() => { setEnvMode('dust'); playQuindar(audioRef.current, 'Warning: Regional dust storm tau 3.8') }}>Dust τ=3.8</button>
+                  <button className="spebtn" aria-pressed={envMode === 'spe'} onClick={() => { setEnvMode('spe'); playQuindar(audioRef.current, 'Red Alert: S3 Solar Particle Event, abort to rock shelter') }}>Solar Flare S3</button>
+                </div>
+                <div className="rovers" style={{ marginTop: 6 }}>
+                  <div className="rovhead">
+                    <span className="sectoggle">NASA Eyes Orbiters (3)</span>
+                    <button className="toggle" aria-pressed={showOrbiters} onClick={() => { setShowOrbiters(s => !s); if (rideOrb) setRideOrb(null) }}>
+                      {showOrbiters ? '3D Live' : 'Hidden'}
+                    </button>
+                  </div>
+                  {ORBITERS.map(orb => (
+                    <div key={orb.id} className="rovcard">
+                      <div className="rovmain">
+                        <span style={{ color: orb.color }}>● {orb.id} · {orb.altKm} km</span>
+                        <button className="ridebtn" aria-pressed={rideOrb === orb.id} onClick={() => { setShowOrbiters(true); setRideOrb(r => r === orb.id ? null : orb.id) }}>
+                          {rideOrb === orb.id ? 'Riding ×' : 'Ride 3D →'}
+                        </button>
+                      </div>
+                      <div className="orbmeta">{orb.payload}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {leftTab === 'base' && (
               <div className="quickhub">
                 <label>Click Mars to Drop Module (Next: {nextMod})</label>
                 <div className="chipgrid">
@@ -1280,104 +1391,12 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <div className="evacards">
+                <div className="evacards" style={{ marginTop: 4 }}>
                   <button onClick={loadJezeroBase}>
                     <span>Deploy Jezero 5-Node Outpost</span>
                     <em>1-Click Base</em>
                   </button>
                 </div>
-              </div>
-            ) : (
-              <div className="quickhub">
-                <label>Featured Landmarks</label>
-                <div className="chipgrid">
-                  {places.filter(p => ['Jezero (Perseverance)', 'Gale (Curiosity)', 'Olympus Mons', 'Valles Marineris'].includes(p.name)).map(p => (
-                    <button key={p.name} onClick={() => flyTo(p)}>{p.name.replace(/ \(.*\)/, '')}</button>
-                  ))}
-                </div>
-                <label>1-Click EVA &amp; Base Simulations</label>
-                <div className="evacards">
-                  {PRESET_EVAS.map(p => (
-                    <button key={p.id} onClick={() => loadPreset(p)}>
-                      <span>{p.label}</span>
-                      <em>A → B</em>
-                    </button>
-                  ))}
-                  <button onClick={loadJezeroBase}>
-                    <span>Jezero 5-Node Outpost</span>
-                    <em>HAB + ISRU</em>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            <div className="envsim">
-              <label>Survival &amp; Space Weather Sim</label>
-              <div className="envbtns" role="group" aria-label="Space Weather and Dust Storm Simulation">
-                <button aria-pressed={envMode === 'nominal'} onClick={() => setEnvMode('nominal')}>Nominal</button>
-                <button className="dustbtn" aria-pressed={envMode === 'dust'} onClick={() => { setEnvMode('dust'); playQuindar(audioRef.current, 'Warning: Regional dust storm tau 3.8') }}>Dust τ=3.8</button>
-                <button className="spebtn" aria-pressed={envMode === 'spe'} onClick={() => { setEnvMode('spe'); playQuindar(audioRef.current, 'Red Alert: S3 Solar Particle Event, abort to rock shelter') }}>Solar Flare S3</button>
-              </div>
-            </div>
-
-            <div className="rovers">
-              <div className="rovhead">
-                <button className="sectoggle" aria-expanded={orbitOpen} onClick={() => setOrbitOpen(o => !o)}>
-                  NASA Eyes Orbiters (3) {orbitOpen ? '▴' : '▾'}
-                </button>
-                <button className="toggle" aria-pressed={showOrbiters} onClick={() => { setShowOrbiters(s => !s); if (rideOrb) setRideOrb(null) }}>
-                  {showOrbiters ? '3D Live' : 'Hidden'}
-                </button>
-              </div>
-              {orbitOpen && ORBITERS.map(orb => (
-                <div key={orb.id} className="rovcard">
-                  <div className="rovmain">
-                    <span style={{ color: orb.color }}>● {orb.id} · {orb.altKm} km</span>
-                    <button className="ridebtn" aria-pressed={rideOrb === orb.id} onClick={() => { setShowOrbiters(true); setRideOrb(r => r === orb.id ? null : orb.id) }}>
-                      {rideOrb === orb.id ? 'Riding ×' : 'Ride 3D →'}
-                    </button>
-                  </div>
-                  <div className="orbmeta">{orb.payload}</div>
-                </div>
-              ))}
-            </div>
-
-            {rovers.length > 0 && (
-              <div className="rovers">
-                <div className="rovhead">
-                  <button className="sectoggle" aria-expanded={roversOpen} onClick={() => setRoversOpen(o => !o)}>
-                    Rover Traverses ({rovers.length}) {roversOpen ? '▴' : '▾'}
-                  </button>
-                  <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
-                    {showRovers ? 'Shown' : 'Hidden'}
-                  </button>
-                </div>
-                {roversOpen && rovers.map(rv => (
-                  <div key={rv.name} className="rovcard">
-                    <button className="rovmain" onClick={() => glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 32000))}>
-                      <span style={{ color: rv.color }}>● {rv.name}</span>
-                      <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
-                    </button>
-                    <div className="rovjumps">
-                      {rv.waypoints.map(wp => (
-                        <button
-                          key={wp.label}
-                          onClick={() => inspectStop({
-                            title: `${rv.name} · ${wp.label}`,
-                            sub: `${wp.elevation_m.toLocaleString()} m · ${rv.site}`,
-                            image: wp.image,
-                            pia: wp.pia,
-                            text: wp.caption,
-                            lat: wp.lat,
-                            lon: wp.lon,
-                          }, 18000)}
-                        >
-                          {wp.label === 'Quarter Traverse' ? '25%' : wp.label === 'Current Position' ? 'Now →' : wp.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                ))}
               </div>
             )}
           </section>
@@ -1432,8 +1451,9 @@ export default function App() {
           )}
         </section>
       </div>
+      )}
 
-      {!visor && !cuff && (
+      {!visor && !cuff && !cleanUi && (
         <p className="ui hint" aria-live="polite">
           <span className="hintdot" />
           {plannerMode === 'base'
@@ -1446,7 +1466,7 @@ export default function App() {
         </p>
       )}
 
-      {!visor && (preview || cuff || routeData || baseNodes.length > 0) && (
+      {!visor && !cleanUi && (preview || cuff || routeData || baseNodes.length > 0) && (
         <div className="dock-right">
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
@@ -1833,25 +1853,31 @@ export default function App() {
       )}
 
       <nav className="ui panel layers" aria-label="Base layer and crew interface format">
+        {overlaysOpen && (
+          <div className="overlays-menu" role="group" aria-label="Globe Overlays">
+            <button className="sunbtn" aria-pressed={sunlight} onClick={() => setSunlight(s => !s)}>
+              Sunlight Terminator
+            </button>
+            <button className="orbbtn" aria-pressed={showOrbiters} onClick={() => { setShowOrbiters(s => !s); if (rideOrb) setRideOrb(null) }}>
+              3D Orbiters (MRO/TGO)
+            </button>
+            <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
+              Water Ice Zones
+            </button>
+            <button className="hazbtn" aria-pressed={showHazards} onClick={() => setShowHazards(h => !h)}>
+              MOLA Slope Hazards
+            </button>
+            <button className="audiobtn" aria-pressed={audioOn} onClick={toggleAudio}>
+              Quindar Audio
+            </button>
+          </div>
+        )}
         {Object.keys(LAYERS).map(k => (
           <button key={k} aria-pressed={layer === k} onClick={() => setLayer(k)}>{k}</button>
         ))}
-        <button className="sunbtn" aria-pressed={sunlight} onClick={() => setSunlight(s => !s)} title="Toggle real Mars24 day/night shadow and solar terminator">
-          Sunlight
-        </button>
-        <button className="orbbtn" aria-pressed={showOrbiters} onClick={() => { setShowOrbiters(s => !s); if (rideOrb) setRideOrb(null) }} title="Toggle 3D MRO, TGO, and Mars Odyssey orbiters">
-          Orbiters
-        </button>
-        <button className="waterbtn" aria-pressed={showWater} onClick={() => setShowWater(w => !w)}>
-          Water
-        </button>
-        {routeData && (
-          <button className="hazbtn" aria-pressed={showHazards} onClick={() => setShowHazards(h => !h)} title="Toggle MOLA steep slope & cliff hazard zones">
-            Hazards
-          </button>
-        )}
-        <button className="audiobtn" aria-pressed={audioOn} onClick={toggleAudio} title="Toggle NASA Quindar tones & voice telemetry callouts">
-          Audio
+        <span className="navsep" aria-hidden="true" />
+        <button aria-expanded={overlaysOpen} aria-pressed={overlaysOpen} onClick={() => setOverlaysOpen(o => !o)}>
+          Overlays {overlaysOpen ? '▾' : '▴'}
         </button>
         <span className="navsep" aria-hidden="true" />
         <button aria-pressed={!visor && !cuff} onClick={() => { setCuff(false); if (visor) exitVisor() }}>
