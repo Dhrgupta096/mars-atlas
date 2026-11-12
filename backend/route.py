@@ -360,8 +360,29 @@ def _astar(lat1, lon1, lat2, lon2, spread, mode="safe") -> dict | None:
     lats = np.array([90 - (rows[i] + 0.5) / PPD for i, _ in cells])
     lons = np.array([((cols[j] + 0.5) / PPD + 180) % 360 - 180 for _, j in cells])
     lats[0], lons[0], lats[-1], lons[-1] = lat1, lon1, lat2, lon2
+    if 1 < len(lats) < 24:
+        t_old = np.linspace(0.0, 1.0, len(lats))
+        t_new = np.linspace(0.0, 1.0, 24)
+        lats = np.interp(t_new, t_old, lats)
+        lons = np.interp(t_new, t_old, lons)
     d = sum(distance_m(lats[k], lons[k], lats[k + 1], lons[k + 1]) for k in range(len(lats) - 1))
     return _analyse(lats, lons, d)
+
+
+def chain_legs(leg_fn, pts: list[tuple[float, float]]) -> dict | None:
+    """Chain a route function across 2+ waypoints (A -> B -> C -> ...)."""
+    if len(pts) <= 2:
+        return leg_fn(pts[0][0], pts[0][1], pts[1][0], pts[1][1])
+    all_lats, all_lons = [], []
+    for k in range(len(pts) - 1):
+        leg = leg_fn(pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1]) or straight_line(pts[k][0], pts[k][1], pts[k + 1][0], pts[k + 1][1])
+        p = leg["path"]
+        pts_leg = p if k == 0 else p[1:]
+        all_lats.extend(pt[0] for pt in pts_leg)
+        all_lons.extend(pt[1] for pt in pts_leg)
+    lats_arr, lons_arr = np.array(all_lats), np.array(all_lons)
+    d = sum(distance_m(lats_arr[i], lons_arr[i], lats_arr[i + 1], lons_arr[i + 1]) for i in range(len(lats_arr) - 1))
+    return _analyse(lats_arr, lons_arr, d)
 
 
 def slope_hazards(lat1: float, lon1: float, lat2: float, lon2: float, k: int = 6) -> list[dict]:

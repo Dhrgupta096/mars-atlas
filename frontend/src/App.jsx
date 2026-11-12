@@ -113,12 +113,21 @@ function playQuindar(enabled, speechText = '') {
 function parseHashRoute() {
   if (typeof window === 'undefined' || !window.location.hash) return null
   const params = new URLSearchParams(window.location.hash.slice(1))
-  const aStr = params.get('a'), bStr = params.get('b'), suit = params.get('suit')
+  const suit = params.get('suit')
+  const ptsStr = params.get('pts')
+  if (ptsStr) {
+    const pts = ptsStr.split(';').map(s => {
+      const [la, lo] = s.split(',').map(Number)
+      return Number.isNaN(la) || Number.isNaN(lo) ? null : { lat: la, lon: lo }
+    }).filter(Boolean)
+    if (pts.length >= 2) return { pts, suit }
+  }
+  const aStr = params.get('a'), bStr = params.get('b')
   if (!aStr || !bStr) return null
   const [lat1, lon1] = aStr.split(',').map(Number)
   const [lat2, lon2] = bStr.split(',').map(Number)
   if ([lat1, lon1, lat2, lon2].some(Number.isNaN)) return null
-  return { a: { lat: lat1, lon: lon1 }, b: { lat: lat2, lon: lon2 }, suit }
+  return { pts: [{ lat: lat1, lon: lon1 }, { lat: lat2, lon: lon2 }], suit }
 }
 
 const fmtDeg = (v, pos, neg) => `${Math.abs(v).toFixed(2)}°${v >= 0 ? pos : neg}`
@@ -376,18 +385,24 @@ function hideAllPins(ref) {
   for (const p of ref.current?.pins ?? []) p.show = false
   setHoverMarker(ref, false)
 }
-function setPinAB(ref, a, b) {
+const PIN_NAMES = ['A · START', 'B · STOP 1', 'C · STOP 2', 'D · STOP 3', 'E · STOP 4', 'F · DEST']
+function setPinChain(ref, pts) {
   const pins = ref.current?.pins
   if (!pins) return
-  ;[a, b].forEach((pt, idx) => {
-    const pin = pins[idx]
+  pins.forEach((pin, idx) => {
+    const pt = pts[idx]
+    if (!pt) {
+      pin.show = false
+      return
+    }
+    const tag = idx === 0 ? 'A · START' : idx === pts.length - 1 ? `${String.fromCharCode(65 + idx)} · DEST` : PIN_NAMES[idx]
     pin.position = surfPos(pt.lon, pt.lat)
-    pin.label.text = `${pin.letter}\n${fmtDeg(pt.lat, 'N', 'S')} ${fmtDeg(pt.lon, 'E', 'W')}`
+    pin.label.text = `${tag}\n${fmtDeg(pt.lat, 'N', 'S')} ${fmtDeg(pt.lon, 'E', 'W')}`
     pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
     pin.show = true
     getJson(`/api/terrain?lat=${pt.lat.toFixed(4)}&lon=${pt.lon.toFixed(4)}`)
       .then(t => {
-        pin.label.text = `${pin.letter}\n${t.elevation_m.toLocaleString()} m · ${t.slope_deg}° ${t.risk.toUpperCase()}`
+        pin.label.text = `${tag}\n${t.elevation_m.toLocaleString()} m · ${t.slope_deg}° ${t.risk.toUpperCase()}`
         pin.point.color = Cesium.Color.fromCssColorString(RISK_COLOR[t.risk])
       })
       .catch(() => {})
@@ -486,8 +501,8 @@ export default function App() {
   const [simMs, setSimMs] = useState(null) // null = LIVE real-time; number = planned EVA epoch ms
   const [route, setRoute] = useState(() => {
     const h = parseHashRoute()
-    return h ? [h.a, h.b] : []
-  }) // [{lat, lon}] — A, then B
+    return h ? h.pts : []
+  }) // [{lat, lon}] — A, B, C... (up to 6 stops)
   const [routeData, setRouteData] = useState(null) // {direct, safe, science, plan} from /api/route
   const [profKey, setProfKey] = useState('safe')
   const [hoverIdx, setHoverIdx] = useState(null)
@@ -526,10 +541,13 @@ export default function App() {
   const [overlaysOpen, setOverlaysOpen] = useState(false)
   const [cleanUi, setCleanUi] = useState(false)
   const [terrain3d, setTerrain3d] = useState(2) // 0 = Flat, 1 = 1x MOLA 3D, 2 = 2x MOLA 3D, 3 = 3x MOLA 3D
+  const [chainNext, setChainNext] = useState(false)
+  const [freeDrive, setFreeDrive] = useState(null) // null | { lat, lon, hdg, pitch, elev, slope, risk }
   const [baseNodes, setBaseNodes] = useState([])
   const [nextMod, setNextMod] = useState('HAB-1')
   const plannerModeRef = useRef('eva')
   const nextModRef = useRef('HAB-1')
+  const chainNextRef = useRef(false)
 
   // Globe
   useEffect(() => {
@@ -606,17 +624,18 @@ export default function App() {
         eyeOffset: EYE_OFFSET,
       },
     }), { letter })
-    const pins = [makePin('A · START', false), makePin('B · DEST', true)]
+    const pins = PIN_NAMES.map((nm, i) => makePin(nm, i % 2 === 1))
     viewer.pins = pins
     viewer.hoverPin = makePin('', false)
     if (initialHash) {
-      setPinAB(viewerRef, initialHash.a, initialHash.b)
-      glide(camera, Cesium.Cartesian3.fromDegrees((initialHash.a.lon + initialHash.b.lon) / 2, (initialHash.a.lat + initialHash.b.lat) / 2, 52000))
+      setPinChain(viewerRef, initialHash.pts)
+      const [p0, p1] = [initialHash.pts[0], initialHash.pts[initialHash.pts.length - 1]]
+      glide(camera, Cesium.Cartesian3.fromDegrees((p0.lon + p1.lon) / 2, (p0.lat + p1.lat) / 2, 52000))
     }
     let downPos = null
     const handler = new Cesium.ScreenSpaceEventHandler(scene.canvas)
     handler.setInputAction(e => { downPos = Cesium.Cartesian2.clone(e.position) }, Cesium.ScreenSpaceEventType.LEFT_DOWN)
-    handler.setInputAction(e => {
+    const onSurfaceClick = (e, forceChain = false) => {
       if (downPos && Cesium.Cartesian2.distance(downPos, e.position) > 5) return // ignore drags
       setIntro(false)
       setReplaying(false)
@@ -645,33 +664,27 @@ export default function App() {
       setRouteData(null)
       setHoverIdx(null)
       setRoute(prev => {
-        const next = prev.length === 2 ? [{ lat, lon }] : [...prev, { lat, lon }]
-        setLoadingRoute(next.length === 2)
-        playQuindar(audioRef.current, next.length === 1 ? 'Start pin Alpha locked' : 'Destination Bravo locked, computing MOLA route')
-        if (prev.length === 2) pins[1].show = false
-        const pin = pins[next.length - 1]
-        pin.position = surfPos(lon, lat)
-        pin.label.text = `${pin.letter}\n${fmtDeg(lat, 'N', 'S')} ${fmtDeg(lon, 'E', 'W')}`
-        pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
-        pin.show = true
-        getJson(`/api/terrain?lat=${lat.toFixed(4)}&lon=${lon.toFixed(4)}`)
-          .then(t => {
-            pin.label.text = `${pin.letter}\n${t.elevation_m.toLocaleString()} m · ${t.slope_deg}° ${t.risk.toUpperCase()}`
-            pin.point.color = Cesium.Color.fromCssColorString(RISK_COLOR[t.risk])
-          })
-          .catch(() => {})
+        const shouldAppend = (forceChain || chainNextRef.current) && prev.length >= 2 && prev.length < 6
+        chainNextRef.current = false
+        setChainNext(false)
+        const next = shouldAppend ? [...prev, { lat, lon }] : prev.length >= 2 ? [{ lat, lon }] : [...prev, { lat, lon }]
+        setLoadingRoute(next.length >= 2)
+        playQuindar(audioRef.current, next.length === 1 ? 'Start pin Alpha locked' : `Waypoint ${String.fromCharCode(64 + next.length)} locked, computing MOLA route`)
+        setPinChain(viewerRef, next)
         return next
       })
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK)
+    }
+    handler.setInputAction(e => onSurfaceClick(e, false), Cesium.ScreenSpaceEventType.LEFT_CLICK)
+    handler.setInputAction(e => onSurfaceClick(e, true), Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.SHIFT)
     return () => { clearTimeout(introTimer); scene.preRender.removeEventListener(onPreRender); handler.destroy(); viewer.destroy() }
   }, [])
 
-  // A + B set → fetch routes
+  // 2+ stops set → fetch single-leg or multi-leg chained routes
   useEffect(() => {
     if (route.length < 2) return
-    const [a, b] = route
     let stale = false
-    getJson(`/api/route?lat1=${a.lat}&lon1=${a.lon}&lat2=${b.lat}&lon2=${b.lon}`).then(data => {
+    const ptsParam = route.map(p => `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`).join(';')
+    getJson(`/api/route?pts=${encodeURIComponent(ptsParam)}`).then(data => {
       if (stale) return
       setLoadingRoute(false)
       setRouteData(data)
@@ -1045,8 +1058,10 @@ export default function App() {
   }
   const copyLink = () => {
     if (route.length < 2) return
-    const [a, b] = route
-    const hash = `#a=${a.lat.toFixed(4)},${a.lon.toFixed(4)}&b=${b.lat.toFixed(4)},${b.lon.toFixed(4)}&suit=${evaSpec}`
+    const ptsStr = route.map(p => `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`).join(';')
+    const hash = route.length === 2
+      ? `#a=${route[0].lat.toFixed(4)},${route[0].lon.toFixed(4)}&b=${route[1].lat.toFixed(4)},${route[1].lon.toFixed(4)}&suit=${evaSpec}`
+      : `#pts=${ptsStr}&suit=${evaSpec}`
     window.history.replaceState(null, '', hash)
     navigator.clipboard?.writeText(window.location.href).catch(() => {})
     setCopied(true)
@@ -1062,6 +1077,8 @@ export default function App() {
     setVisorIdx(0)
     setPreview(null)
     setCheckedSteps({})
+    chainNextRef.current = false
+    setChainNext(false)
     if (window.location.hash) window.history.replaceState(null, '', window.location.pathname)
     hideAllPins(viewerRef)
   }
@@ -1072,8 +1089,10 @@ export default function App() {
     setHoverIdx(null)
     setLoadingRoute(true)
     setCheckedSteps({})
+    chainNextRef.current = false
+    setChainNext(false)
     playQuindar(audioRef.current, `Loading ${p.label}`)
-    setPinAB(viewerRef, p.a, p.b)
+    setPinChain(viewerRef, [p.a, p.b])
     setRoute([p.a, p.b])
     glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees((p.a.lon + p.b.lon) / 2, (p.a.lat + p.b.lat) / 2, 52000))
   }
@@ -1181,9 +1200,13 @@ export default function App() {
     return () => { if (timer) clearTimeout(timer) }
   }, [replaying, activeRoute, profKey, visor, terrain3d])
   const vIdx = Math.min(visorIdx, Math.max(pathLen - 1, 0))
-  const [vLat, vLon] = activeRoute ? activeRoute.path[vIdx] : (route.length ? [route[0].lat, route[0].lon] : [visorAnchor.lat, visorAnchor.lon])
+  const [baseVLat, baseVLon] = activeRoute ? activeRoute.path[vIdx] : (route.length ? [route[0].lat, route[0].lon] : [visorAnchor.lat, visorAnchor.lon])
+  const vLat = freeDrive ? freeDrive.lat : baseVLat
+  const vLon = freeDrive ? freeDrive.lon : baseVLon
   const vFrac = activeRoute ? vIdx / Math.max(pathLen - 1, 1) : 0
-  const vElev = activeRoute ? activeRoute.profile_m[vIdx] : null
+  const vElev = freeDrive?.elev !== undefined ? freeDrive.elev : (activeRoute ? activeRoute.profile_m[vIdx] : null)
+  const vSlope = freeDrive?.slope !== undefined ? freeDrive.slope : (activeRoute ? activeRoute.max_slope_deg : 0)
+  const vRisk = freeDrive?.risk ?? (vSlope < 10 ? 'safe' : vSlope < 20 ? 'caution' : 'too steep')
   const vElapsedH = activeRoute ? ((planMode === 'walk' ? activeRoute.walk_round_trip_h : activeRoute.rover_round_trip_h) * 0.5) * vFrac : 0
   const vO2RemH = Math.max(spec.o2 - vElapsedH, 0)
   const vWalkBackH = activeRoute ? (spec.buddy ? activeRoute.rover_round_trip_h * 0.5 : activeRoute.walk_back_h) * vFrac : 0
@@ -1191,6 +1214,7 @@ export default function App() {
   const cardinal = CARDINAL[Math.round(visorHeading / 45) % 8]
   const enterVisor = () => {
     setCuff(false)
+    setFreeDrive(null)
     setVisorAnchor(center)
     setVisorIdx(0)
     setVisor(true)
@@ -1203,15 +1227,23 @@ export default function App() {
       setMinZoom(viewerRef, 2000)
       return
     }
-    setMinZoom(viewerRef, 150)
+    setMinZoom(viewerRef, 120)
+    if (freeDrive) {
+      const surfH = (freeDrive.elev ?? 0) * terrain3d
+      v.camera.setView({
+        destination: Cesium.Cartesian3.fromDegrees(freeDrive.lon, freeDrive.lat, surfH + 1650),
+        orientation: { heading: Cesium.Math.toRadians(freeDrive.hdg), pitch: Cesium.Math.toRadians(freeDrive.pitch ?? -13), roll: 0 },
+      })
+      return
+    }
     const path = activeRoute?.path
     const nextPt = path ? path[Math.min(vIdx + 1, path.length - 1)] : null
     const prevPt = path ? path[Math.max(vIdx - 1, 0)] : null
-    const hdg = path && vIdx < path.length - 1 ? bearingDeg(vLat, vLon, nextPt[0], nextPt[1])
-      : (path && path.length > 1 ? bearingDeg(prevPt[0], prevPt[1], vLat, vLon) : 65)
-    const surfH = (vElev ?? 0) * terrain3d
+    const hdg = path && vIdx < path.length - 1 ? bearingDeg(baseVLat, baseVLon, nextPt[0], nextPt[1])
+      : (path && path.length > 1 ? bearingDeg(prevPt[0], prevPt[1], baseVLat, baseVLon) : 65)
+    const surfH = ((activeRoute ? activeRoute.profile_m[vIdx] : 0) ?? 0) * terrain3d
     v.camera.flyTo({
-      destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, surfH + 1800),
+      destination: Cesium.Cartesian3.fromDegrees(baseVLon, baseVLat, surfH + 1800),
       orientation: { heading: Cesium.Math.toRadians(hdg), pitch: Cesium.Math.toRadians(-14), roll: 0 },
       duration: 1.1,
     })
@@ -1222,7 +1254,29 @@ export default function App() {
     } else {
       setHoverMarker(viewerRef, false)
     }
-  }, [visor, vIdx, vLat, vLon, vElev, activeRoute, profKey, terrain3d])
+  }, [visor, vIdx, baseVLat, baseVLon, freeDrive, activeRoute, profKey, terrain3d])
+
+  const stepDrive = (fwdSign = 0, turnDeg = 0) => {
+    const curLat = freeDrive ? freeDrive.lat : baseVLat
+    const curLon = freeDrive ? freeDrive.lon : baseVLon
+    const curHdg = ((freeDrive ? freeDrive.hdg : visorHeading) + turnDeg + 360) % 360
+    const curElev = freeDrive?.elev ?? (activeRoute ? activeRoute.profile_m[vIdx] : 0)
+    const stepDeg = fwdSign * 0.0085 // ~500m per drive pulse
+    const rad = (curHdg * Math.PI) / 180
+    const nLat = Math.max(-89.0, Math.min(89.0, curLat + stepDeg * Math.cos(rad)))
+    const nLon = ((curLon + (stepDeg * Math.sin(rad)) / Math.max(Math.cos((curLat * Math.PI) / 180), 0.1) + 540) % 360) - 180
+    setVisorHeading(Math.round(curHdg))
+    setFreeDrive(prev => ({ lat: nLat, lon: nLon, hdg: curHdg, pitch: prev?.pitch ?? -13, elev: curElev, slope: prev?.slope ?? 0, risk: prev?.risk ?? 'safe' }))
+    getJson(`/api/terrain?lat=${nLat.toFixed(4)}&lon=${nLon.toFixed(4)}`)
+      .then(t => {
+        setFreeDrive(prev => prev ? { ...prev, elev: t.elevation_m, slope: t.slope_deg, risk: t.risk } : prev)
+      })
+      .catch(() => {})
+  }
+  const stepDriveRef = useRef(stepDrive)
+  useEffect(() => {
+    stepDriveRef.current = stepDrive
+  })
 
   useEffect(() => {
     const onKey = e => {
@@ -1231,10 +1285,21 @@ export default function App() {
         setCleanUi(u => !u)
       } else if (visor && e.key === 'Escape') {
         setVisor(false)
+        setFreeDrive(null)
         viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
+      } else if (visor && (e.key === 'w' || e.key === 'W')) {
+        stepDriveRef.current(1, 0)
+      } else if (visor && (e.key === 's' || e.key === 'S')) {
+        stepDriveRef.current(-1, 0)
+      } else if (visor && (e.key === 'a' || e.key === 'A')) {
+        stepDriveRef.current(0, -12)
+      } else if (visor && (e.key === 'd' || e.key === 'D')) {
+        stepDriveRef.current(0, 12)
       } else if (visor && (e.key === 'ArrowRight' || e.key === 'ArrowUp')) {
+        setFreeDrive(null)
         setVisorIdx(i => Math.min(i + 1, Math.max(pathLen - 1, 0)))
       } else if (visor && (e.key === 'ArrowLeft' || e.key === 'ArrowDown')) {
+        setFreeDrive(null)
         setVisorIdx(i => Math.max(i - 1, 0))
       }
     }
@@ -1244,6 +1309,7 @@ export default function App() {
 
   const exitVisor = () => {
     setVisor(false)
+    setFreeDrive(null)
     setHoverMarker(viewerRef, false)
     viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
   }
@@ -1523,7 +1589,18 @@ export default function App() {
             ? `Base Builder · Click Mars to drop ${nextMod} (${baseNodes.length} modules placed)`
             : loadingRoute
               ? 'Computing safest & science routes across MOLA terrain…'
-              : ['Step 1/2 · Click Mars to set start pin A', 'Step 2/2 · Click destination pin B', 'EVA Route A → B active · click Mars for new A'][route.length]}
+              : chainNext
+                ? `Click Mars to append Stop ${String.fromCharCode(65 + route.length)}`
+                : route.length === 0
+                  ? 'Step 1/2 · Click Mars to set start pin A'
+                  : route.length === 1
+                    ? 'Step 2/2 · Click destination pin B'
+                    : `EVA ${route.map((_, i) => String.fromCharCode(65 + i)).join(' → ')} · Shift+Click to add stop`}
+          {plannerMode === 'eva' && route.length >= 2 && route.length < 6 && (
+            <button className="clearbtn" aria-pressed={chainNext} onClick={() => { chainNextRef.current = !chainNext; setChainNext(c => !c) }}>
+              {chainNext ? 'Cancel Stop' : `+ Stop ${String.fromCharCode(65 + route.length)}`}
+            </button>
+          )}
           {plannerMode === 'base' && baseNodes.length > 0 && <button className="clearbtn" onClick={clearBase}>× Clear Base</button>}
           {plannerMode === 'eva' && route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
         </p>
@@ -1680,7 +1757,7 @@ export default function App() {
             <section className="ui panel routeinfo" aria-live="polite">
           <div className="routehead">
             <button className="sectoggle" aria-expanded={routeOpen} onClick={() => setRouteOpen(o => !o)}>
-              Route A → B {routeOpen ? '▾' : '▸'}
+              Route {route.map((_, i) => String.fromCharCode(65 + i)).join(' → ')} {routeOpen ? '▾' : '▸'}
             </button>
             <span className="badge" style={{ color: MODE_COLOR[planMode], borderColor: MODE_COLOR[planMode] }}>
               {spec.o2}h {MODE_LABEL[planMode]}
@@ -1894,7 +1971,11 @@ export default function App() {
               </div>
             )}
             {vElev !== null && <div className="suit-row"><span>ELEVATION</span><b>{vElev.toLocaleString()} m</b></div>}
-            {activeRoute && <div className="suit-row"><span>DIST TO B</span><b>{vRemKm} km</b></div>}
+            <div className="suit-row">
+              <span>SURFACE TILT</span>
+              <b style={{ color: RISK_COLOR[vRisk] }}>{vSlope.toFixed(1)}° · {vRisk.toUpperCase()}</b>
+            </div>
+            {activeRoute && !freeDrive && <div className="suit-row"><span>DIST TO END</span><b>{vRemKm} km</b></div>}
           </aside>
 
           <div className="visor-reticle" aria-hidden="true">
@@ -1904,12 +1985,20 @@ export default function App() {
           </div>
 
           <div className="visor-controls">
-            <button onClick={() => setVisorIdx(i => Math.max(i - 1, 0))} disabled={vIdx <= 0}>◀ Prev</button>
-            <div className="visor-scrub">
-              <span>WAYPOINT {vIdx + 1} / {pathLen} ({profKey.toUpperCase()})</span>
-              <input type="range" min="0" max={Math.max(pathLen - 1, 0)} value={vIdx} onChange={e => setVisorIdx(Number(e.target.value))} />
-            </div>
-            <button onClick={() => setVisorIdx(i => Math.min(i + 1, Math.max(pathLen - 1, 0)))} disabled={vIdx >= pathLen - 1}>Next ▶</button>
+            <button onClick={() => stepDrive(0, -18)} title="Turn Left [A]">⟲ A</button>
+            <button onClick={() => stepDrive(1, 0)} title="Drive Forward [W]">▲ W Drive</button>
+            <button onClick={() => stepDrive(-1, 0)} title="Reverse [S]">▼ S</button>
+            <button onClick={() => stepDrive(0, 18)} title="Turn Right [D]">D ⟳</button>
+            {pathLen > 1 && (
+              <>
+                <button onClick={() => { setFreeDrive(null); setVisorIdx(i => Math.max(i - 1, 0)) }} disabled={vIdx <= 0}>◀ Prev</button>
+                <div className="visor-scrub">
+                  <span>{freeDrive ? 'FREE DRIVE (WASD)' : `WAYPOINT ${vIdx + 1} / ${pathLen} (${profKey.toUpperCase()})`}</span>
+                  <input type="range" min="0" max={Math.max(pathLen - 1, 0)} value={vIdx} onChange={e => { setFreeDrive(null); setVisorIdx(Number(e.target.value)) }} />
+                </div>
+                <button onClick={() => { setFreeDrive(null); setVisorIdx(i => Math.min(i + 1, Math.max(pathLen - 1, 0))) }} disabled={vIdx >= pathLen - 1}>Next ▶</button>
+              </>
+            )}
             <button className="visor-exit" onClick={exitVisor}>Exit Visor [ESC]</button>
           </div>
         </div>

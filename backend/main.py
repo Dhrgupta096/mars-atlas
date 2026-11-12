@@ -6,7 +6,7 @@ from fastapi import FastAPI, Query, Response
 from fastapi.staticfiles import StaticFiles
 from mars_time import mars_time
 from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap
-from route import straight_line, safest_path, science_path, eva_plan, slope_hazards
+from route import straight_line, safest_path, science_path, eva_plan, slope_hazards, chain_legs
 from rovers import ROVERS
 from water import water_sites, water_at
 
@@ -56,13 +56,19 @@ def terrain(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-
 
 
 @app.get("/api/route")
-def route(lat1: float = Query(..., ge=-90, le=90), lon1: float = Query(..., ge=-180, le=360),
-          lat2: float = Query(..., ge=-90, le=90), lon2: float = Query(..., ge=-180, le=360)):
-    direct = straight_line(lat1, lon1, lat2, lon2)
-    safe = safest_path(lat1, lon1, lat2, lon2)
-    science = science_path(lat1, lon1, lat2, lon2)
+def route(lat1: float = Query(0.0, ge=-90, le=90), lon1: float = Query(0.0, ge=-180, le=360),
+          lat2: float = Query(0.0, ge=-90, le=90), lon2: float = Query(0.0, ge=-180, le=360),
+          pts: str | None = Query(None)):
+    if pts:
+        waypoints = [(float(p.split(",")[0]), float(p.split(",")[1])) for p in pts.split(";") if "," in p][:6]
+    else:
+        waypoints = [(lat1, lon1), (lat2, lon2)]
+    direct = chain_legs(straight_line, waypoints)
+    safe = chain_legs(safest_path, waypoints)
+    science = chain_legs(science_path, waypoints)
     return {"direct": direct, "safe": safe, "science": science, "plan": eva_plan(direct, safe, science),
-            "hazards": slope_hazards(lat1, lon1, lat2, lon2), "water": water_at(lat2, lon2)}
+            "hazards": slope_hazards(waypoints[0][0], waypoints[0][1], waypoints[-1][0], waypoints[-1][1]),
+            "water": water_at(waypoints[-1][0], waypoints[-1][1])}
 
 
 @app.get("/api/rovers")

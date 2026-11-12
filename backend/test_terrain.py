@@ -1,5 +1,6 @@
 """Run: python test_terrain.py  (checks MOLA heights against published values)"""
 from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap
+from route import chain_legs, safest_path, straight_line
 
 assert abs(elevation(-4.59, 137.44) - (-4501)) < 100      # Curiosity landing site, published -4,501 m
 assert elevation(18.65, -133.8) > 19000                   # Olympus Mons summit region
@@ -17,4 +18,6 @@ for m in ("elevation", "themis"):
     assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 2000
 hmap = render_mola_heightmap(1, 0, 0)
 assert len(hmap) == 33 * 33 * 4
+multi = chain_legs(safest_path, [(18.44, 77.45), (18.50, 77.40), (18.55, 77.36)])
+assert multi is not None and multi["distance_m"] > 5000 and len(multi["path"]) > 20
 print("all terrain checks passed")
