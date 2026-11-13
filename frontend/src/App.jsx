@@ -190,6 +190,34 @@ function orbiterState(orb, epochMs) {
   return { ...orb, lat, lon, nLat, nLon, hdg: bearingDeg(lat, lon, nLat, nLon), phase, rotDeg }
 }
 
+function surfaceDistKm(lat1, lon1, lat2, lon2) {
+  const r = Math.PI / 180
+  const dLat = (lat2 - lat1) * r
+  const dLon = (lon2 - lon1) * r
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * r) * Math.cos(lat2 * r) * Math.sin(dLon / 2) ** 2
+  return 2 * 3390 * Math.asin(Math.min(1, Math.sqrt(a)))
+}
+
+function orbiterCommWindow(lat, lon, epochMs) {
+  const losKm = 1420 // ~24° Mars horizon cone for 320-400 km orbiters
+  for (const orb of ORBITERS) {
+    const s = orbiterState(orb, epochMs)
+    if (surfaceDistKm(lat, lon, s.lat, s.lon) <= losKm) {
+      return { live: true, id: orb.id, label: `IN PASS · ${orb.id}` }
+    }
+  }
+  for (let m = 2; m <= 120; m += 2) {
+    const t = epochMs + m * 60000
+    for (const orb of ORBITERS) {
+      const s = orbiterState(orb, t)
+      if (surfaceDistKm(lat, lon, s.lat, s.lon) <= losKm) {
+        return { live: false, id: orb.id, mins: m, label: `${orb.id} IN ${m}M` }
+      }
+    }
+  }
+  return { live: false, id: 'MRO', mins: 120, label: 'RELAY STANDBY' }
+}
+
 const LABEL_BG = new Cesium.Color(0.05, 0.04, 0.04, 0.88)
 const LABEL_PAD = new Cesium.Cartesian2(6, 4)
 
@@ -543,6 +571,7 @@ export default function App() {
   const [terrain3d, setTerrain3d] = useState(2) // 0 = Flat, 1 = 1x MOLA 3D, 2 = 2x MOLA 3D, 3 = 3x MOLA 3D
   const [chainNext, setChainNext] = useState(false)
   const [freeDrive, setFreeDrive] = useState(null) // null | { lat, lon, hdg, pitch, elev, slope, risk }
+  const [leakSec, setLeakSec] = useState(null) // null | countdown seconds for O2 leak drill
   const [baseNodes, setBaseNodes] = useState([])
   const [nextMod, setNextMod] = useState('HAB-1')
   const plannerModeRef = useRef('eva')
@@ -1335,6 +1364,19 @@ export default function App() {
   }
   const activeDate = simMs !== null ? new Date(simMs) : now
   const shiftSim = deltaMs => setSimMs(prev => (prev ?? now.getTime()) + deltaMs)
+  const safeAnchor = route[0] ?? baseNodes[0] ?? visorAnchor
+  const distToSafeKm = surfaceDistKm(vLat, vLon, safeAnchor.lat, safeAnchor.lon)
+  const liveComm = orbiterCommWindow(vLat, vLon, activeDate.getTime())
+  const leakResult = leakSec === null ? null : distToSafeKm <= 0.85 ? 'survived' : leakSec <= 0 ? 'depleted' : null
+
+  useEffect(() => {
+    if (!visor || leakSec === null || leakResult || leakSec <= 0) return
+    const id = setTimeout(() => setLeakSec(s => (s !== null && s > 0 ? s - 1 : 0)), 1000)
+    return () => clearTimeout(id)
+  }, [visor, leakSec, leakResult])
+
+  const startLeakDrill = () => setLeakSec(180)
+  const stopLeakDrill = () => setLeakSec(null)
 
   const baseTotals = baseNodes.reduce((acc, n) => {
     const mod = BASE_MODULES.find(m => m.code === n.code) ?? BASE_MODULES[0]
@@ -1798,7 +1840,7 @@ export default function App() {
                           const ok = spec.buddy || r.walk_back_h <= spec.wb
                           return <span style={{ color: ok ? '#5fd38d' : '#e5484d' }}>{spec.buddy ? 'Buddy Rover' : `${fmtHours(r.walk_back_h)} · ${ok ? 'OK' : `>${spec.wb}H`}`}</span>
                         }],
-                        ['Comm Link', r => r.comm ? <span style={{ color: r.comm.direct_ok ? '#5fd38d' : '#56b4e9' }}>{r.comm.direct_ok ? `VHF LOS (${r.comm.los_km}km)` : 'MRO/TGO Relay'}</span> : '—'],
+                        ['Comm Link', r => r.comm ? <span style={{ color: r.comm.direct_ok || liveComm.live ? '#5fd38d' : '#56b4e9' }}>{r.comm.direct_ok ? `VHF LOS (${r.comm.los_km}km)` : liveComm.label}</span> : '—'],
                         ['RAD Dose', r => r.radiation ? `${(planMode === 'walk' ? r.radiation.walk_msv : r.radiation.rover_msv).toFixed(2)} mSv (${r.radiation.rate_usv_h} μSv/h)` : '—'],
                       ].map(([name, fmt]) => (
                         <tr key={name}>
@@ -1961,8 +2003,28 @@ export default function App() {
             {activeRoute?.comm && (
               <div className="suit-row">
                 <span>COMM LINK</span>
-                <b style={{ color: activeRoute.comm.direct_ok ? '#5fd38d' : '#56b4e9' }}>{activeRoute.comm.direct_ok ? 'VHF HAB LOS' : 'UHF RELAY'}</b>
+                <b style={{ color: activeRoute.comm.direct_ok || liveComm.live ? '#5fd38d' : '#56b4e9' }}>
+                  {activeRoute.comm.direct_ok ? 'VHF HAB LOS' : liveComm.label}
+                </b>
               </div>
+            )}
+            {leakSec !== null && (
+              <>
+                <div className="suit-row">
+                  <span>⚠ O2 LEAK DRILL</span>
+                  <b style={{ color: leakResult === 'survived' ? '#5fd38d' : '#e5484d' }}>
+                    {leakResult === 'survived'
+                      ? 'SAFE AT HAB ✓'
+                      : leakResult === 'depleted'
+                        ? 'O2 DEPLETED!'
+                        : `${Math.floor(leakSec / 60)}:${String(leakSec % 60).padStart(2, '0')} · RETURN TO A`}
+                  </b>
+                </div>
+                <div className="suit-row">
+                  <span>DIST TO SAFE A</span>
+                  <b style={{ color: distToSafeKm <= 0.85 ? '#5fd38d' : '#f2c14e' }}>{distToSafeKm.toFixed(2)} km</b>
+                </div>
+              </>
             )}
             {activeRoute?.radiation && (
               <div className="suit-row">
@@ -1989,6 +2051,9 @@ export default function App() {
             <button onClick={() => stepDrive(1, 0)} title="Drive Forward [W]">▲ W Drive</button>
             <button onClick={() => stepDrive(-1, 0)} title="Reverse [S]">▼ S</button>
             <button onClick={() => stepDrive(0, 18)} title="Turn Right [D]">D ⟳</button>
+            <button onClick={leakSec !== null ? stopLeakDrill : startLeakDrill} style={leakSec !== null ? { borderColor: '#e5484d', color: '#e5484d' } : undefined}>
+              {leakSec !== null ? '■ End Drill' : '⚠ O2 Leak'}
+            </button>
             {pathLen > 1 && (
               <>
                 <button onClick={() => { setFreeDrive(null); setVisorIdx(i => Math.max(i - 1, 0)) }} disabled={vIdx <= 0}>◀ Prev</button>
