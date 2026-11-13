@@ -23,15 +23,16 @@ const USGS_WMS = 'https://planetarymaps.usgs.gov/cgi-bin/mapserv?map=/maps/mars/
 const LAYERS = {
   Imagery: { id: 'Mars_Viking_MDIM21_ClrMosaic_global_232m', maxLevel: 7, detail: 'THEMIS' },
   'THEMIS 100m': { wms: 'MOLA_THEMIS_blend', maxLevel: 12, detail: 'THEMIS' },
+  'Night-IR': { id: 'THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018', ext: 'png', maxLevel: 7, detail: 'Thermal Inertia' },
   Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade' },
 }
 const EARTH_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone
 const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d' }
 const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
 
-function trekLayer({ id, maxLevel }) {
+function trekLayer({ id, maxLevel, ext = 'jpg' }) {
   return new Cesium.WebMapTileServiceImageryProvider({
-    url: `${TREK}${id}/1.0.0/default/default028mm/{TileMatrix}/{TileRow}/{TileCol}.jpg`,
+    url: `${TREK}${id}/1.0.0/default/default028mm/{TileMatrix}/{TileRow}/{TileCol}.${ext}`,
     layer: id, style: 'default', tileMatrixSetID: 'default028mm',
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
     maximumLevel: maxLevel, credit: 'NASA / JPL-Caltech · Mars Trek',
@@ -458,8 +459,26 @@ function setPinChain(ref, pts) {
   })
 }
 const PRESET_EVAS = [
-  { id: 'jezero', label: 'Jezero Delta EVA', a: { lat: 18.4446, lon: 77.4509 }, b: { lat: 18.515, lon: 77.375 } },
-  { id: 'gale', label: 'Gale → Mt. Sharp EVA', a: { lat: -4.5895, lon: 137.4417 }, b: { lat: -4.67, lon: 137.385 } },
+  {
+    id: 'jezero',
+    label: 'Jezero Delta EVA',
+    pts: [
+      { lat: 18.4446, lon: 77.4509 }, // Octavia E. Butler Landing
+      { lat: 18.4680, lon: 77.4340 }, // Neretva Delta Front Scarp
+      { lat: 18.4890, lon: 77.4050 }, // Enchanted Lake Mudstones
+      { lat: 18.5150, lon: 77.3750 }, // Margin Carbonate Ridge
+    ],
+  },
+  {
+    id: 'gale',
+    label: 'Gale → Mt. Sharp Ascent',
+    pts: [
+      { lat: -4.5895, lon: 137.4417 }, // Bradbury Landing
+      { lat: -4.6540, lon: 137.3800 }, // Pahrump Hills (Murray Strata)
+      { lat: -4.7300, lon: 137.3620 }, // Vera Rubin Hematite Ridge
+      { lat: -4.8100, lon: 137.3600 }, // Gediz Vallis Ridge (Mt. Sharp)
+    ],
+  },
 ]
 function setMinZoom(ref, dist) {
   if (ref.current) ref.current.scene.screenSpaceCameraController.minimumZoomDistance = dist
@@ -601,6 +620,7 @@ export default function App() {
   const [chainNext, setChainNext] = useState(false)
   const [freeDrive, setFreeDrive] = useState(null) // null | { lat, lon, hdg, pitch, elev, slope, risk }
   const [leakSec, setLeakSec] = useState(null) // null | countdown seconds for O2 leak drill
+  const [layerOpacity, setLayerOpacity] = useState(1.0)
   const [baseNodes, setBaseNodes] = useState([])
   const [nextMod, setNextMod] = useState('HAB-1')
   const plannerModeRef = useRef('eva')
@@ -936,6 +956,10 @@ export default function App() {
       localElev.brightness = 1.02
       localElev.saturation = 1.14
 
+      const nightIr = layers.addImageryProvider(trekLayer(LAYERS['Night-IR']))
+      nightIr.contrast = 1.25
+      nightIr.brightness = 1.05
+
       const themisBlend = layers.addImageryProvider(usgsWmsLayer('MOLA_THEMIS_blend', 12, 3))
       themisBlend.alpha = 0.86
       themisBlend.contrast = 1.18
@@ -944,15 +968,26 @@ export default function App() {
       themisHiRes.alpha = 0.42
       themisHiRes.contrast = 1.32
 
-      v._marsLayers = { localRust, viking, localElev, themisBlend, themisHiRes }
+      v._marsLayers = { localRust, viking, localElev, nightIr, themisBlend, themisHiRes }
     }
-    const { localRust, viking, localElev, themisBlend, themisHiRes } = v._marsLayers
+    const { localRust, viking, localElev, nightIr, themisBlend, themisHiRes } = v._marsLayers
     localRust.show = true
     viking.show = layer === 'Imagery'
     localElev.show = layer === 'Elevation'
+    nightIr.show = layer === 'Night-IR'
     themisBlend.show = layer === 'THEMIS 100m'
-    themisHiRes.show = layer !== 'Elevation'
+    themisHiRes.show = layer !== 'Elevation' && layer !== 'Night-IR'
   }, [layer])
+
+  useEffect(() => {
+    const v = viewerRef.current
+    if (!v || !v._marsLayers) return
+    const { localElev, nightIr, themisBlend } = v._marsLayers
+    if (nightIr) nightIr.alpha = layerOpacity
+    if (localElev) localElev.alpha = layerOpacity
+    if (themisBlend) themisBlend.alpha = 0.86 * layerOpacity
+    setRenderMode(viewerRef, false, visor)
+  }, [layerOpacity, visor])
 
   // 3D MOLA Terrain Mesh toggle (0 = Flat Ellipsoid, 1..3 = 1x..3x Real MOLA 3D Elevation Mesh)
   useEffect(() => {
@@ -1154,9 +1189,12 @@ export default function App() {
     chainNextRef.current = false
     setChainNext(false)
     playQuindar(audioRef.current, `Loading ${p.label}`)
-    setPinChain(viewerRef, [p.a, p.b])
-    setRoute([p.a, p.b])
-    glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees((p.a.lon + p.b.lon) / 2, (p.a.lat + p.b.lat) / 2, 52000))
+    const pts = p.pts ?? [p.a, p.b]
+    setPinChain(viewerRef, pts)
+    setRoute(pts)
+    const midLat = pts.reduce((s, pt) => s + pt.lat, 0) / pts.length
+    const midLon = pts.reduce((s, pt) => s + pt.lon, 0) / pts.length
+    glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(midLon, midLat, 54000))
   }
   const exportBrief = () => {
     if (!routeData || !activeRoute) return
@@ -1191,6 +1229,50 @@ export default function App() {
     setPreview(item)
     playQuindar(audioRef.current, item.title)
     glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(item.lon, item.lat, height))
+  }
+  const openLiveCam = rv => {
+    playQuindar(audioRef.current, `Connecting to ${rv.name} live surface camera feed`)
+    getJson(`/api/rover-images/${rv.name.toLowerCase()}`)
+      .then(res => {
+        if (res.images && res.images.length > 0) {
+          const imgs = res.images
+          setPreview({
+            title: `${rv.name} · NASA JPL Raw Surface Feed`,
+            sub: `SOL ${res.sol} · ${imgs[0].instrument}`,
+            image: imgs[0].image,
+            pia: `Sol ${res.sol} Raw`,
+            text: imgs[0].caption,
+            lat: rv.current[0],
+            lon: rv.current[1],
+            liveList: imgs,
+            liveIdx: 0,
+          })
+          glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(rv.current[1], rv.current[0], 28000))
+        } else {
+          const lastWp = rv.waypoints[rv.waypoints.length - 1]
+          inspectStop({
+            title: `${rv.name} · ${lastWp.label}`,
+            sub: `${lastWp.elevation_m.toLocaleString()} m · ${rv.site}`,
+            image: lastWp.image,
+            pia: lastWp.pia,
+            text: lastWp.caption,
+            lat: lastWp.lat,
+            lon: lastWp.lon,
+          }, 28000)
+        }
+      })
+      .catch(() => {
+        const lastWp = rv.waypoints[rv.waypoints.length - 1]
+        inspectStop({
+          title: `${rv.name} · ${lastWp.label}`,
+          sub: `${lastWp.elevation_m.toLocaleString()} m · ${rv.site}`,
+          image: lastWp.image,
+          pia: lastWp.pia,
+          text: lastWp.caption,
+          lat: lastWp.lat,
+          lon: lastWp.lon,
+        }, 28000)
+      })
   }
   const flyTo = p => {
     setQuery('')
@@ -1545,6 +1627,13 @@ export default function App() {
                           <em>{rv.distance_km} km{rv.latest_sol ? ` · Sol ${rv.latest_sol}` : ''}</em>
                         </button>
                         <div className="rovjumps">
+                          <button
+                            className="livecambtn"
+                            onClick={() => openLiveCam(rv)}
+                            title={`NASA Live Surface Raw Photos from ${rv.name}`}
+                          >
+                            Live 📷
+                          </button>
                           {rv.waypoints.map(wp => (
                             <button
                               key={wp.label}
@@ -1709,6 +1798,41 @@ export default function App() {
               <img src={preview.image} alt={preview.title} className="previmg" loading="lazy" />
               <div className="prevmeta">{preview.sub} · {fmtDeg(preview.lat, 'N', 'S')} {fmtDeg(preview.lon, 'E', 'W')}</div>
               <p className="prevtext">{preview.text}</p>
+              {preview.liveList && (
+                <div className="livenav">
+                  <button
+                    onClick={() => {
+                      const nIdx = (preview.liveIdx - 1 + preview.liveList.length) % preview.liveList.length
+                      const item = preview.liveList[nIdx]
+                      setPreview(p => ({
+                        ...p,
+                        liveIdx: nIdx,
+                        image: item.image,
+                        sub: `SOL ${item.sol} · ${item.instrument}`,
+                        text: item.caption,
+                      }))
+                    }}
+                  >
+                    ◀ Prev
+                  </button>
+                  <span>RAW {preview.liveIdx + 1} / {preview.liveList.length}</span>
+                  <button
+                    onClick={() => {
+                      const nIdx = (preview.liveIdx + 1) % preview.liveList.length
+                      const item = preview.liveList[nIdx]
+                      setPreview(p => ({
+                        ...p,
+                        liveIdx: nIdx,
+                        image: item.image,
+                        sub: `SOL ${item.sol} · ${item.instrument}`,
+                        text: item.caption,
+                      }))
+                    }}
+                  >
+                    Next ▶
+                  </button>
+                </div>
+              )}
               <button className="prevvisor" onClick={() => { setVisorAnchor({ lat: preview.lat, lon: preview.lon }); setVisor(true) }}>
                 Open Ground View in Visor HUD →
               </button>
@@ -2180,6 +2304,17 @@ export default function App() {
         {Object.keys(LAYERS).map(k => (
           <button key={k} aria-pressed={layer === k} onClick={() => setLayer(k)}>{k}</button>
         ))}
+        {layer !== 'Imagery' && (
+          <div className="layer-blend" title="NASA Worldview Style Layer Opacity Blend">
+            <span>{Math.round(layerOpacity * 100)}%</span>
+            <input
+              type="range" min="0.2" max="1" step="0.05"
+              value={layerOpacity}
+              onChange={e => setLayerOpacity(Number(e.target.value))}
+              aria-label="Layer opacity blend"
+            />
+          </div>
+        )}
         <button
           aria-pressed={terrain3d > 0}
           onClick={() => setTerrain3d(t => (t + 1) % 4)}

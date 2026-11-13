@@ -88,6 +88,8 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .rovjumps { display: flex; justify-content: space-between; gap: 4px; margin-top: 5px; }
 .rovjumps button { all: unset; cursor: pointer; font: 500 9px var(--mono); color: var(--muted); padding: 3px 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
 .rovjumps button:hover { color: var(--dust); border-color: var(--oxide); }
+.rovjumps button.livecambtn { color: #fff; background: var(--oxide); border-color: var(--oxide); font-weight: 600; }
+.rovjumps button.livecambtn:hover { opacity: 0.92; }
 
 .local { flex: 0 0 auto; }
 .localhead { display: flex; justify-content: space-between; align-items: center; }
@@ -116,6 +118,9 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .layers button.cuffbtn[aria-pressed="true"] { color: var(--basalt); background: var(--mint); }
 .layers button.visorbtn[aria-pressed="true"] { color: #fff; background: var(--oxide); }
 .layers button.orbbtn[aria-pressed="true"] { color: var(--basalt); background: var(--sky); }
+.layers button.nightirbtn[aria-pressed="true"] { color: var(--basalt); background: #c084fc; }
+.layer-blend { display: inline-flex; align-items: center; gap: 5px; padding: 0 6px; font: 500 10px var(--mono); color: var(--muted); border-left: 1px solid var(--line); }
+.layer-blend input { width: 50px; accent-color: var(--oxide); cursor: pointer; height: 3px; }
 .layers .divider { width: 1px; background: var(--line); margin: 4px 3px; }
 
 .routeinfo { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
@@ -176,6 +181,9 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .previmg { display: block; width: 100%; height: 120px; object-fit: cover; margin-top: 8px; border-radius: 8px; border: 1px solid var(--line); background: #000; }
 .prevmeta { margin-top: 6px; font: 10px var(--mono); color: var(--amber); }
 .prevtext { margin: 5px 0 0; font: 11px/1.4 var(--sans); color: var(--muted); }
+.livenav { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); font: 600 10px var(--mono); color: var(--amber); }
+.livenav button { all: unset; cursor: pointer; padding: 3px 8px; font: 600 9px var(--mono); color: var(--dust); border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.livenav button:hover { border-color: var(--amber); color: var(--amber); }
 .prevvisor { all: unset; box-sizing: border-box; display: block; width: 100%; margin-top: 8px; padding: 7px 10px; text-align: center; cursor: pointer; font: 600 11px var(--sans); color: var(--basalt); background: var(--amber); border-radius: 8px; }
 .prevvisor:hover { opacity: .9; }
 

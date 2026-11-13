@@ -45,12 +45,20 @@ def _load_one(name: str, filename: str, site: str, landing: str, color: str, pho
         sampled.append(pts[-1])
 
     n = len(sampled)
-    milestones = [
-        ("Landing", 0, landing),
-        ("Quarter Traverse", n // 4, f"25% of {site} route"),
-        ("Midpoint", n // 2, f"50% of {site} route"),
-        ("Current Position", n - 1, f"Latest rover position ({round(total_m / 1000, 1)} km driven)"),
-    ]
+    if name == "Curiosity":
+        milestones = [
+            ("Bradbury Landing", 0, "Curiosity landing site in Gale Crater floor"),
+            ("Pahrump Hills", n // 4, "Murray Formation · Basal laminated lacustrine mudstone"),
+            ("Vera Rubin Ridge", n // 2, "Hematite-rich resistant bedrock ridge on Mt. Sharp"),
+            ("Mount Sharp Ascent", n - 1, f"Gediz Vallis Ridge & Sulfate Unit ({round(total_m / 1000, 1)} km driven)"),
+        ]
+    else:
+        milestones = [
+            ("Butler Landing", 0, "Octavia E. Butler Landing in Jezero Crater floor"),
+            ("Delta Front", n // 4, "Ancient Neretva river delta scarp & Kodiak butte strata"),
+            ("Enchanted Lake", n // 2, "Finely laminated lacustrine delta mudstones"),
+            ("Current Position", n - 1, f"Jezero Margin Carbonates ({round(total_m / 1000, 1)} km driven)"),
+        ]
     return {
         "name": name,
         "site": site,

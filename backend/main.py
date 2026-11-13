@@ -1,6 +1,9 @@
 """Run: uvicorn main:app --reload --port 8000"""
 from datetime import datetime, timezone
+import json
 from pathlib import Path
+import ssl
+import time as _time
 from urllib.request import Request, urlopen
 from fastapi import FastAPI, Query, Response
 from fastapi.staticfiles import StaticFiles
@@ -74,6 +77,51 @@ def route(lat1: float = Query(0.0, ge=-90, le=90), lon1: float = Query(0.0, ge=-
 @app.get("/api/rovers")
 def rovers():
     return ROVERS
+
+
+_ROVER_IMG_CACHE: dict = {}
+
+
+@app.get("/api/rover-images/{rover_name}")
+def rover_images(rover_name: str):
+    """Live raw surface imagery from NASA JPL Mars 2020 / MSL API."""
+    name = rover_name.lower().strip()
+    cat = "mars2020" if "perseverance" in name or "m20" in name else "msl"
+    now_ts = _time.time()
+    cached = _ROVER_IMG_CACHE.get(cat)
+    if cached and (now_ts - cached["ts"] < 1800):
+        return cached["data"]
+
+    url = f"https://mars.nasa.gov/rss/api/?feed=raw_images&feedtype=json&category={cat}&num=10&order=sol+desc"
+    try:
+        ctx = ssl._create_unverified_context()
+        req = Request(url, headers={"User-Agent": "Mozilla/5.0 MarsAtlas/1.0"})
+        with urlopen(req, context=ctx, timeout=6) as resp:
+            raw = json.loads(resp.read().decode())
+            imgs = []
+            for item in raw.get("images", []):
+                files = item.get("image_files") or {}
+                img_url = files.get("medium") or files.get("small") or files.get("full_res") or item.get("url")
+                if not img_url:
+                    continue
+                cam = item.get("camera") or {}
+                inst = cam.get("instrument") or item.get("title") or "Navigation Camera"
+                imgs.append({
+                    "sol": item.get("sol"),
+                    "title": item.get("title") or f"{cat.upper()} Sol {item.get('sol')}",
+                    "instrument": inst,
+                    "date_utc": item.get("date_taken_utc") or item.get("date_received"),
+                    "image": img_url,
+                    "caption": item.get("caption") or f"Raw surface telemetry from {inst} on Sol {item.get('sol')}",
+                })
+            if imgs:
+                result = {"rover": cat, "count": len(imgs), "sol": imgs[0]["sol"], "images": imgs}
+                _ROVER_IMG_CACHE[cat] = {"ts": now_ts, "data": result}
+                return result
+    except Exception:
+        pass
+
+    return cached["data"] if cached else {"rover": cat, "count": 0, "images": []}
 
 
 @app.get("/api/water")
