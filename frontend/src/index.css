@@ -9,14 +9,17 @@
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --sans: "Inter Tight", system-ui, -apple-system, sans-serif;
 }
-* { box-sizing: border-box; }
+* { box-sizing: border-box; scrollbar-width: thin; scrollbar-color: rgba(226, 87, 43, 0.35) transparent; }
+*::-webkit-scrollbar { width: 5px; height: 5px; }
+*::-webkit-scrollbar-thumb { background: rgba(226, 87, 43, 0.35); border-radius: 3px; }
+*::-webkit-scrollbar-track { background: transparent; }
 html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: var(--dust); font-family: var(--sans); overflow: hidden; }
 .globe { position: fixed; inset: 0; }
 .globe::after { content: ""; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, rgba(226, 87, 43, 0.06) 0%, rgba(13, 10, 9, 0.45) 85%); transition: background .5s; }
 .globe.dust-haze::after { background: radial-gradient(circle at 50% 50%, rgba(242, 193, 78, 0.14) 0%, rgba(226, 87, 43, 0.12) 45%, rgba(13, 10, 9, 0.55) 88%); }
 .cesium-viewer-bottom { opacity: 0.35; }
 
-.intro-card { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 25; width: 420px; max-width: calc(100vw - 40px); padding: 22px 26px; background: rgba(13, 10, 9, 0.9); border: 1px solid rgba(226, 87, 43, 0.5); border-top: 3px solid var(--oxide); backdrop-filter: blur(12px); text-align: center; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75); animation: introFade .5s ease-out; }
+.intro-card { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); z-index: 25; width: 420px; max-width: calc(100vw - 40px); padding: 22px 26px; background: rgba(13, 10, 9, 0.94); border: 1px solid rgba(226, 87, 43, 0.5); border-top: 3px solid var(--oxide); text-align: center; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.75); animation: introFade .4s ease-out; }
 @keyframes introFade { from { opacity: 0; transform: translate(-50%, -46%); } to { opacity: 1; transform: translate(-50%, -50%); } }
 .intro-kicker { font: 600 9px var(--mono); letter-spacing: 0.18em; color: var(--oxide); }
 .intro-card h1 { margin: 10px 0 6px; font: 600 28px/1 var(--mono); letter-spacing: 0.28em; color: var(--dust); }
@@ -44,7 +47,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .dock-left { position: fixed; top: 64px; bottom: 20px; left: 20px; width: 276px; z-index: 10; display: flex; flex-direction: column; justify-content: space-between; gap: 12px; pointer-events: none; }
 .dock-right { position: fixed; top: 64px; bottom: 66px; right: 20px; width: 370px; z-index: 10; display: flex; flex-direction: column; gap: 10px; pointer-events: none; }
 
-.panel { pointer-events: auto; background: var(--panel); border: 1px solid var(--line); border-top: 2px solid rgba(226, 87, 43, 0.55); padding: 11px 14px; backdrop-filter: blur(10px); box-shadow: 0 10px 28px rgba(0, 0, 0, 0.5); }
+.panel { pointer-events: auto; background: rgba(13, 10, 9, 0.92); border: 1px solid var(--line); border-top: 2px solid rgba(226, 87, 43, 0.65); padding: 11px 14px; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55); border-radius: 2px; }
 .panel label, .sub { font: 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
 .sectoggle { all: unset; cursor: pointer; font: 600 10px var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--dust); }
 .sectoggle:hover { color: var(--oxide); }
@@ -154,7 +157,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .prevvisor { all: unset; box-sizing: border-box; width: 100%; padding: 6px 8px; text-align: center; cursor: pointer; font: 600 10px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--dust); border: 1px solid var(--oxide); }
 .prevvisor:hover { background: var(--oxide); color: var(--basalt); }
 
-.hint { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 9; margin: 0; padding: 7px 14px; background: var(--panel); border: 1px solid var(--line); font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dust); display: flex; align-items: center; gap: 8px; white-space: nowrap; backdrop-filter: blur(8px); }
+.hint { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 9; margin: 0; padding: 7px 14px; background: rgba(13, 10, 9, 0.92); border: 1px solid var(--line); font: 500 10px var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--dust); display: flex; align-items: center; gap: 8px; white-space: nowrap; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45); border-radius: 2px; }
 .hintdot { width: 6px; height: 6px; border-radius: 50%; background: var(--oxide); box-shadow: 0 0 8px var(--oxide); }
 .clearbtn { all: unset; cursor: pointer; color: var(--oxide); font-weight: 600; margin-left: 4px; }
 .clearbtn:hover { color: var(--dust); }
@@ -214,7 +217,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .ret-line { width: 36px; height: 1px; background: var(--oxide); }
 .ret-box { width: 18px; height: 18px; border: 1px solid var(--oxide); }
 
-.visor-controls { position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%); pointer-events: auto; display: flex; align-items: center; gap: 12px; background: rgba(13, 10, 9, 0.88); border: 1px solid rgba(226, 87, 43, 0.4); padding: 10px 16px; font: 11px var(--mono); }
+.visor-controls { position: absolute; bottom: 22px; left: 50%; transform: translateX(-50%); pointer-events: auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; max-width: calc(100vw - 32px); background: rgba(13, 10, 9, 0.94); border: 1px solid rgba(226, 87, 43, 0.45); padding: 8px 12px; font: 11px var(--mono); border-radius: 2px; }
 .visor-controls button { all: unset; cursor: pointer; padding: 6px 10px; border: 1px solid var(--line); color: var(--dust); font: 500 10px var(--mono); letter-spacing: .1em; text-transform: uppercase; }
 .visor-controls button:hover:not(:disabled) { border-color: var(--oxide); color: var(--oxide); }
 .visor-controls button:disabled { opacity: 0.35; cursor: default; }

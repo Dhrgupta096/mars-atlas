@@ -1,6 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import * as Cesium from 'cesium'
 import gsap from 'gsap'
+
+function EarthClock({ simMs }) {
+  const [t, setT] = useState(() => Date.now())
+  useEffect(() => {
+    if (simMs !== null) return
+    const id = setInterval(() => setT(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [simMs])
+  const d = new Date(simMs ?? t)
+  return simMs !== null
+    ? d.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+    : d.toLocaleTimeString([], { hour12: false })
+}
 
 const MARS = Cesium.Ellipsoid.MARS
 Cesium.Ellipsoid.default = MARS
@@ -516,6 +529,13 @@ function syncSunlight(ref, enabled, mars, center) {
   })
 }
 
+function setRenderMode(ref, continuous) {
+  const scene = ref.current?.scene
+  if (!scene) return
+  scene.requestRenderMode = !continuous
+  scene.requestRender()
+}
+
 export default function App() {
   const globeRef = useRef(null)
   const viewerRef = useRef(null)
@@ -525,7 +545,7 @@ export default function App() {
   const [query, setQuery] = useState('')
   const [center, setCenter] = useState({ lat: 0, lon: -60 })
   const [mars, setMars] = useState(null)
-  const [now, setNow] = useState(() => new Date())
+  const [initEpoch] = useState(() => Date.now())
   const [simMs, setSimMs] = useState(null) // null = LIVE real-time; number = planned EVA epoch ms
   const [route, setRoute] = useState(() => {
     const h = parseHashRoute()
@@ -584,18 +604,18 @@ export default function App() {
       globe: new Cesium.Globe(MARS), baseLayer: false, baseLayerPicker: false, geocoder: false,
       homeButton: false, sceneModePicker: false, navigationHelpButton: false, timeline: false,
       animation: false, fullscreenButton: false, infoBox: false, selectionIndicator: false,
-      skyAtmosphere: false,
+      skyAtmosphere: false, requestRenderMode: true, maximumRenderTimeChange: Infinity,
     })
     const { scene, camera } = viewer
-    viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 1.5)
-    scene.postProcessStages.fxaa.enabled = true
+    viewer.resolutionScale = 1
+    scene.postProcessStages.fxaa.enabled = false
     scene.moon = undefined
     tuneAtmosphere(viewer)
     scene.globe.depthTestAgainstTerrain = true
-    scene.globe.tileCacheSize = 1500
-    scene.globe.preloadAncestors = true
-    scene.globe.preloadSiblings = true
-    scene.globe.maximumScreenSpaceError = 1.6
+    scene.globe.tileCacheSize = 900
+    scene.globe.preloadAncestors = false
+    scene.globe.preloadSiblings = false
+    scene.globe.maximumScreenSpaceError = 2.0
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#6c311b')
     scene.screenSpaceCameraController.minimumZoomDistance = 600
     viewerRef.current = viewer
@@ -1010,11 +1030,10 @@ export default function App() {
       return
     }
     const tick = () => {
-      setNow(new Date())
       getJson(base).then(setMars).catch(() => setMars(null))
     }
     tick()
-    const id = setInterval(tick, 1000)
+    const id = setInterval(tick, 15000)
     return () => clearInterval(id)
   }, [center, simMs])
 
@@ -1362,12 +1381,23 @@ export default function App() {
     setHoverIdx(null)
     setHoverMarker(viewerRef, false)
   }
-  const activeDate = simMs !== null ? new Date(simMs) : now
-  const shiftSim = deltaMs => setSimMs(prev => (prev ?? now.getTime()) + deltaMs)
+  const refEpoch = simMs ?? (mars?.utc ? Date.parse(mars.utc) : initEpoch)
+  const activeDate = new Date(refEpoch)
+  const shiftSim = deltaMs => setSimMs(prev => (prev ?? Date.now()) + deltaMs)
   const safeAnchor = route[0] ?? baseNodes[0] ?? visorAnchor
   const distToSafeKm = surfaceDistKm(vLat, vLon, safeAnchor.lat, safeAnchor.lon)
-  const liveComm = orbiterCommWindow(vLat, vLon, activeDate.getTime())
+  const commBucket = Math.floor(refEpoch / 30000)
+  const commLatBucket = Math.round(vLat * 10)
+  const commLonBucket = Math.round(vLon * 10)
+  const liveComm = useMemo(
+    () => orbiterCommWindow(commLatBucket / 10, commLonBucket / 10, commBucket * 30000),
+    [commLatBucket, commLonBucket, commBucket],
+  )
   const leakResult = leakSec === null ? null : distToSafeKm <= 0.85 ? 'survived' : leakSec <= 0 ? 'depleted' : null
+
+  useEffect(() => {
+    setRenderMode(viewerRef, !!(showOrbiters || replaying || rideOrb))
+  }, [showOrbiters, replaying, rideOrb, layer, terrain3d, sunlight, showWater, showHazards, routeData, baseNodes, visor, freeDrive, visorIdx])
 
   useEffect(() => {
     if (!visor || leakSec === null || leakResult || leakSec <= 0) return
@@ -1440,7 +1470,7 @@ export default function App() {
         <dl className="clocks">
           <div>
             <dt>{simMs !== null ? 'Planned EVA · Earth' : `Earth · ${EARTH_TZ}`}</dt>
-            <dd>{simMs !== null ? activeDate.toLocaleString([], { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) : activeDate.toLocaleTimeString([], { hour12: false })}</dd>
+            <dd><EarthClock simMs={simMs} /></dd>
           </div>
           <div><dt>Mars · MTC</dt><dd>{mars?.mtc ?? '--:--:--'}</dd></div>
           <div><dt>Mars Year</dt><dd>{mars?.mars_year ?? '--'}</dd></div>
