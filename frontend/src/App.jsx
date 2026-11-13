@@ -1726,6 +1726,9 @@ export default function App() {
                 <span><b style={{ color: '#7fd1c7' }}>+{baseTotals.o2} kg/sol</b> O2/CH4</span>
                 <span><b>{baseNodes.length}</b> NODES</span>
               </div>
+              <div className="microbar" title="Outpost Power Margin">
+                <div style={{ width: `${Math.min(100, Math.max(12, 50 + baseTotals.kw * 1.2))}%`, background: baseTotals.kw >= 0 ? '#5fd38d' : '#e5484d' }} />
+              </div>
               <ul className="manifestlist baselist">
                 {baseNodes.map((n, i) => {
                   const mod = BASE_MODULES.find(m => m.code === n.code) ?? BASE_MODULES[0]
@@ -1902,6 +1905,14 @@ export default function App() {
                     </p>
                   )}
                   <p className="why"><b>Why this route ({spec.short}):</b> {whyText}</p>
+                  {activeRoute && (
+                    <div className="microbar" title={`Walk-Back Margin (${fmtHours(activeRoute.walk_back_h)} / ${spec.wb}h limit)`}>
+                      <div style={{
+                        width: `${Math.min(100, Math.max(10, (activeRoute.walk_back_h / Math.max(spec.wb, 1)) * 100))}%`,
+                        background: spec.buddy || activeRoute.walk_back_h <= spec.wb ? '#5fd38d' : '#e5484d',
+                      }} />
+                    </div>
+                  )}
                 </>
               )}
               {routeTab === 'terrain' && (

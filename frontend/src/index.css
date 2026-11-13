@@ -227,7 +227,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 
 .globe.spe-haze::after { background: radial-gradient(circle at 50% 50%, rgba(229, 72, 77, 0.14) 0%, rgba(226, 87, 43, 0.14) 48%, rgba(13, 10, 9, 0.62) 88%); }
 
-.alertbar { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 14; display: flex; flex-direction: column; gap: 4px; padding: 7px 14px; background: rgba(15, 11, 10, 0.94); border: 1px solid #56b4e9; border-top: 2px solid #56b4e9; font: 500 10px var(--mono); letter-spacing: .08em; color: var(--dust); white-space: nowrap; backdrop-filter: blur(10px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65); }
+.alertbar { position: fixed; top: 64px; left: 50%; transform: translateX(-50%); z-index: 14; display: flex; flex-direction: column; gap: 4px; padding: 7px 14px; background: rgba(15, 11, 10, 0.95); border: 1px solid #56b4e9; border-top: 2px solid #56b4e9; font: 500 10px var(--mono); letter-spacing: .08em; color: var(--dust); white-space: nowrap; box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65); animation: panelIn .2s ease-out; }
 .alertbar.dust { border-color: #f2c14e; border-top-color: #f2c14e; }
 .alertbar.spe { border-color: #e5484d; border-top-color: #e5484d; background: rgba(28, 10, 11, 0.94); }
 .alertbar span { display: flex; align-items: center; gap: 8px; }
@@ -245,7 +245,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .cleanbtn { all: unset; pointer-events: auto; cursor: pointer; padding: 3px 8px; font: 600 9px var(--mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--line); background: rgba(232, 224, 214, 0.04); transition: border-color .2s, color .2s, background .2s; }
 .cleanbtn:hover, .cleanbtn[aria-pressed="true"] { border-color: var(--oxide); color: var(--basalt); background: var(--oxide); }
 
-.overlays-menu { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 3px; padding: 6px; min-width: 175px; background: rgba(15, 11, 10, 0.96); border: 1px solid var(--line); border-top: 2px solid var(--oxide); backdrop-filter: blur(12px); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7); }
+.overlays-menu { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 3px; padding: 6px; min-width: 175px; background: rgba(15, 11, 10, 0.96); border: 1px solid var(--line); border-top: 2px solid var(--oxide); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7); animation: panelIn .16s ease-out; }
 .overlays-menu button { text-align: left; border: 1px solid var(--line); padding: 6px 9px; }
 
 .envsim { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
@@ -265,3 +265,23 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .basepanel { flex: 0 1 auto; min-height: 0; overflow-y: auto; border-top-color: #5fd38d; }
 .baselist { max-height: 155px; }
 .layers button.orbbtn[aria-pressed="true"] { color: var(--basalt); background: #56b4e9; }
+
+@keyframes panelIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes pulseDot { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.82); } }
+
+.dock-right .panel { animation: panelIn .22s cubic-bezier(0.22, 1, 0.36, 1); }
+.hintdot { animation: pulseDot 2.4s ease-in-out infinite; }
+.layers button, .visor-controls button, .modeswitch button, .envbtns button { transition: border-color .16s ease, background .16s ease, color .16s ease; }
+
+.microbar { height: 3px; background: rgba(232, 224, 214, 0.1); margin: 6px 0 8px; border-radius: 2px; overflow: hidden; }
+.microbar div { height: 100%; transition: width .35s ease, background .25s ease; }
+
+@media (max-width: 1100px) {
+  .dock-left { width: 244px; left: 12px; }
+  .dock-right { width: 316px; right: 12px; bottom: 72px; }
+  .layers { right: 12px; bottom: 12px; flex-wrap: wrap; max-width: calc(100vw - 268px); }
+}
+@media (max-width: 860px) {
+  .clocks div:nth-child(n+4) { display: none; }
+  .hint { max-width: calc(100vw - 24px); overflow: hidden; text-overflow: ellipsis; }
+}
