@@ -1475,7 +1475,10 @@ export default function App() {
 
       <header className="ui bar">
         <div className="brand">
-          <button className="mark" onClick={goHome} aria-label="Back to full Mars view">MARS<span>/</span>ATLAS</button>
+          <button className="mark" onClick={goHome} aria-label="Back to full Mars view">
+            <img src="/logo.svg" alt="" className="brand-logo" />
+            MARS<span>/</span>ATLAS
+          </button>
           <span className="missiontag">ORBITAL EVA PLANNER · MOLA 32PPD + THEMIS 100M</span>
           <button className="cleanbtn" aria-pressed={cleanUi} onClick={() => setCleanUi(u => !u)} title="Hide side panels for full-screen Mars globe (Shortcut: H)">
             {cleanUi ? 'Show UI [H]' : 'Clean Globe [H]'}

@@ -39,7 +39,8 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 
 .bar { position: fixed; top: 0; left: 0; right: 0; z-index: 12; display: flex; justify-content: space-between; align-items: center; padding: 14px 20px; background: linear-gradient(180deg, rgba(9, 9, 11, 0.88) 0%, rgba(9, 9, 11, 0) 100%); pointer-events: none; }
 .brand { display: flex; align-items: center; gap: 12px; }
-.mark { all: unset; pointer-events: auto; cursor: pointer; font: 700 16px/1 var(--sans); letter-spacing: 0.16em; color: var(--dust); transition: opacity .18s; }
+.mark { all: unset; pointer-events: auto; cursor: pointer; display: inline-flex; align-items: center; gap: 9px; font: 700 16px/1 var(--sans); letter-spacing: 0.16em; color: var(--dust); transition: opacity .18s; }
+.brand-logo { width: 28px; height: 28px; display: block; flex: 0 0 auto; }
 .mark:hover { opacity: .75; }
 .mark:focus-visible { outline: 1px solid var(--oxide); outline-offset: 6px; border-radius: 4px; }
 .mark span { color: var(--oxide); margin: 0 0.14em; }
