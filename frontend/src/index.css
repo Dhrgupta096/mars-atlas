@@ -15,7 +15,7 @@
 *::-webkit-scrollbar-track { background: transparent; }
 html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: var(--dust); font-family: var(--sans); overflow: hidden; }
 .globe { position: fixed; inset: 0; }
-.globe::after { content: ""; position: fixed; inset: 0; pointer-events: none; background: radial-gradient(circle at 50% 50%, rgba(226, 87, 43, 0.06) 0%, rgba(13, 10, 9, 0.45) 85%); transition: background .5s; }
+.globe.dust-haze::after, .globe.spe-haze::after { content: ""; position: fixed; inset: 0; pointer-events: none; transition: background .5s; }
 .globe.dust-haze::after { background: radial-gradient(circle at 50% 50%, rgba(242, 193, 78, 0.14) 0%, rgba(226, 87, 43, 0.12) 45%, rgba(13, 10, 9, 0.55) 88%); }
 .cesium-viewer-bottom { opacity: 0.35; }
 

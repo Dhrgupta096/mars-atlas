@@ -39,6 +39,7 @@ function trekLayer({ id, maxLevel }) {
 }
 
 const _hmapCache = new Map()
+const _scaledHmapCache = new Map()
 function createMolaTerrainProvider(scale = 2.0) {
   return new Cesium.CustomHeightmapTerrainProvider({
     width: 33,
@@ -47,8 +48,20 @@ function createMolaTerrainProvider(scale = 2.0) {
     credit: 'NASA MGS MOLA 32ppd 3D Mesh',
     callback: (x, y, level) => {
       const z = Math.min(level, 7)
+      const sKey = `${scale}/${z}/${y}/${x}`
+      const hit = _scaledHmapCache.get(sKey)
+      if (hit) return hit
       const key = `${z}/${y}/${x}`
-      const p = _hmapCache.get(key) ?? fetch(`/api/heightmap/${z}/${y}/${x}.bin`)
+      const cached = _hmapCache.get(key)
+      const scaleArr = base => {
+        if (scale === 1.0) return base
+        const scaled = new Float32Array(base.length)
+        for (let i = 0; i < base.length; i++) scaled[i] = base[i] * scale
+        _scaledHmapCache.set(sKey, scaled)
+        return scaled
+      }
+      if (cached instanceof Float32Array) return scaleArr(cached)
+      const p = cached ?? fetch(`/api/heightmap/${z}/${y}/${x}.bin`)
         .then(r => (r.ok ? r.arrayBuffer() : new ArrayBuffer(33 * 33 * 4)))
         .then(buf => {
           const arr = new Float32Array(buf)
@@ -56,13 +69,8 @@ function createMolaTerrainProvider(scale = 2.0) {
           return arr
         })
         .catch(() => new Float32Array(33 * 33))
-      if (!_hmapCache.has(key)) _hmapCache.set(key, p)
-      return Promise.resolve(p).then(base => {
-        if (scale === 1.0) return base
-        const scaled = new Float32Array(base.length)
-        for (let i = 0; i < base.length; i++) scaled[i] = base[i] * scale
-        return scaled
-      })
+      if (!cached) _hmapCache.set(key, p)
+      return p.then(scaleArr)
     },
   })
 }
@@ -529,9 +537,10 @@ function syncSunlight(ref, enabled, mars, center) {
   })
 }
 
-function setRenderMode(ref, continuous) {
+function setRenderMode(ref, continuous, depthTest = false) {
   const scene = ref.current?.scene
   if (!scene) return
+  scene.globe.depthTestAgainstTerrain = depthTest
   scene.requestRenderMode = !continuous
   scene.requestRender()
 }
@@ -611,11 +620,12 @@ export default function App() {
     scene.postProcessStages.fxaa.enabled = false
     scene.moon = undefined
     tuneAtmosphere(viewer)
-    scene.globe.depthTestAgainstTerrain = true
-    scene.globe.tileCacheSize = 900
+    scene.globe.depthTestAgainstTerrain = false
+    scene.globe.tileCacheSize = 600
+    scene.globe.loadingDescendantLimit = 6
     scene.globe.preloadAncestors = false
     scene.globe.preloadSiblings = false
-    scene.globe.maximumScreenSpaceError = 2.0
+    scene.globe.maximumScreenSpaceError = 3.2
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#6c311b')
     scene.screenSpaceCameraController.minimumZoomDistance = 600
     viewerRef.current = viewer
@@ -654,7 +664,11 @@ export default function App() {
     const onMove = () => {
       const c = camera.pickEllipsoid(new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2), MARS)
       const g = c ? MARS.cartesianToCartographic(c) : MARS.cartesianToCartographic(camera.position)
-      if (g) setCenter({ lat: Cesium.Math.toDegrees(g.latitude), lon: Cesium.Math.toDegrees(g.longitude) })
+      if (g) {
+        const nLat = Cesium.Math.toDegrees(g.latitude)
+        const nLon = Cesium.Math.toDegrees(g.longitude)
+        setCenter(prev => (Math.abs(prev.lat - nLat) > 2 || Math.abs(prev.lon - nLon) > 2 ? { lat: nLat, lon: nLon } : prev))
+      }
       setVisorHeading(Math.round((Cesium.Math.toDegrees(camera.heading) + 360) % 360))
     }
     camera.moveEnd.addEventListener(onMove)
@@ -1396,7 +1410,7 @@ export default function App() {
   const leakResult = leakSec === null ? null : distToSafeKm <= 0.85 ? 'survived' : leakSec <= 0 ? 'depleted' : null
 
   useEffect(() => {
-    setRenderMode(viewerRef, !!(showOrbiters || replaying || rideOrb))
+    setRenderMode(viewerRef, !!(showOrbiters || replaying || rideOrb), visor)
   }, [showOrbiters, replaying, rideOrb, layer, terrain3d, sunlight, showWater, showHazards, routeData, baseNodes, visor, freeDrive, visorIdx])
 
   useEffect(() => {
