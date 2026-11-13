@@ -1331,7 +1331,7 @@ export default function App() {
     setFreeDrive(prev => ({ lat: nLat, lon: nLon, hdg: curHdg, pitch: prev?.pitch ?? -13, elev: curElev, slope: prev?.slope ?? 0, risk: prev?.risk ?? 'safe' }))
     getJson(`/api/terrain?lat=${nLat.toFixed(4)}&lon=${nLon.toFixed(4)}`)
       .then(t => {
-        setFreeDrive(prev => prev ? { ...prev, elev: t.elevation_m, slope: t.slope_deg, risk: t.risk } : prev)
+        setFreeDrive(prev => prev ? { ...prev, elev: t.elevation_m, slope: t.slope_deg, risk: t.risk, ai: t.ai_slope } : prev)
       })
       .catch(() => {})
   }
@@ -1888,6 +1888,7 @@ export default function App() {
                           return <span style={{ color: ok ? '#5fd38d' : '#e5484d' }}>{spec.buddy ? 'Buddy Rover' : `${fmtHours(r.walk_back_h)} · ${ok ? 'OK' : `>${spec.wb}H`}`}</span>
                         }],
                         ['Comm Link', r => r.comm ? <span style={{ color: r.comm.direct_ok || liveComm.live ? '#5fd38d' : '#56b4e9' }}>{r.comm.direct_ok ? `VHF LOS (${r.comm.los_km}km)` : liveComm.label}</span> : '—'],
+                        ['AI Traction', r => r.ai_slope ? <span style={{ color: r.ai_slope.traction_pct >= 75 ? '#5fd38d' : r.ai_slope.traction_pct >= 50 ? '#f2c14e' : '#e5484d' }}>{r.ai_slope.traction_pct}% · {r.ai_slope.hazard_type.split(' ')[0]}</span> : '—'],
                         ['RAD Dose', r => r.radiation ? `${(planMode === 'walk' ? r.radiation.walk_msv : r.radiation.rover_msv).toFixed(2)} mSv (${r.radiation.rate_usv_h} μSv/h)` : '—'],
                       ].map(([name, fmt]) => (
                         <tr key={name}>
@@ -1905,6 +1906,9 @@ export default function App() {
                     </p>
                   )}
                   <p className="why"><b>Why this route ({spec.short}):</b> {whyText}</p>
+                  {activeRoute?.ai_slope && (
+                    <p className="why"><b>AI Slope Verdict:</b> {activeRoute.ai_slope.verdict}</p>
+                  )}
                   {activeRoute && (
                     <div className="microbar" title={`Walk-Back Margin (${fmtHours(activeRoute.walk_back_h)} / ${spec.wb}h limit)`}>
                       <div style={{
@@ -2092,6 +2096,26 @@ export default function App() {
               <span>SURFACE TILT</span>
               <b style={{ color: RISK_COLOR[vRisk] }}>{vSlope.toFixed(1)}° · {vRisk.toUpperCase()}</b>
             </div>
+            {(freeDrive?.ai ?? activeRoute?.ai_slope) && (() => {
+              const ai = freeDrive?.ai ?? activeRoute.ai_slope
+              return (
+                <div className="suit-row">
+                  <span>AI TRACTION</span>
+                  <b style={{ color: ai.traction_pct >= 75 ? '#5fd38d' : ai.traction_pct >= 50 ? '#f2c14e' : '#e5484d' }}>
+                    {ai.traction_pct}% · {ai.hazard_type.toUpperCase()}
+                  </b>
+                </div>
+              )
+            })()}
+            {freeDrive?.ai?.safer_spot && (
+              <button
+                className="clearbtn"
+                style={{ marginTop: 6, width: '100%' }}
+                onClick={() => setFreeDrive(prev => prev ? { ...prev, lat: freeDrive.ai.safer_spot.lat, lon: freeDrive.ai.safer_spot.lon, slope: freeDrive.ai.safer_spot.slope_deg, risk: 'safe' } : prev)}
+              >
+                AI Snap → Safer {freeDrive.ai.safer_spot.slope_deg}° Bench
+              </button>
+            )}
             {activeRoute && !freeDrive && <div className="suit-row"><span>DIST TO END</span><b>{vRemKm} km</b></div>}
           </aside>
 

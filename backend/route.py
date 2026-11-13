@@ -5,7 +5,7 @@ Step 8: walk/rover times, 8 h EVA check, "Why this route?".
 import heapq
 from math import ceil, hypot
 import numpy as np
-from terrain import DEM, PPD, elevation, slope, risk, PIXEL_M
+from terrain import DEM, PPD, elevation, slope, risk, PIXEL_M, ai_slope_analysis
 
 MARS_R = 3389500.0  # mean radius, metres (IAU)
 MAX_SLOPE = 20.0    # blocked above this — same line our risk scale calls "too steep" (Apollo LRV spec was 25°)
@@ -228,6 +228,7 @@ def _analyse(lats, lons, d) -> dict:
         "max_slope_deg": round(float(slopes[worst]), 1),
         "max_slope_at": {"lat": round(float(lats[worst]), 4), "lon": round(float(lons[worst]), 4)},
         "risk": risk(float(slopes[worst])),
+        "ai_slope": ai_slope_analysis(float(lats[worst]), float(lons[worst])),
         "walk_h": round(walk_out, 2),
         "walk_back_h": round(walk_back, 2),
         "walkback_ok": bool(walk_back <= WALKBACK_HOURS),

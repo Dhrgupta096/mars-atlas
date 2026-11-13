@@ -41,6 +41,57 @@ def risk(slope_deg: float) -> str:
     return "safe" if slope_deg < 10 else "caution" if slope_deg < 20 else "too steep"
 
 
+def ai_slope_analysis(lat: float, lon: float) -> dict:
+    """Terramechanics slip, roughness, landing suitability & nearest safer bench from a 5x5 MOLA kernel."""
+    s = slope(lat, lon)
+    r, c = _rc(lat, lon)
+    rows = np.clip(np.arange(r - 2, r + 3), 0, DEM.shape[0] - 1)
+    cols = (np.arange(c - 2, c + 3)) % DEM.shape[1]
+    patch = DEM[rows[:, None], cols[None, :]].astype(np.float32)
+    rough_m = float(np.std(patch))
+    traction_pct = max(12, min(99, int(round(100 - s * 2.6 - min(rough_m, 250.0) * 0.08))))
+    landing_score = max(5, min(99, int(round(100 - s * 3.4 - min(rough_m, 250.0) * 0.1))))
+    if s >= 20:
+        hazard_type = "Steep Escarpment"
+    elif s >= 10:
+        hazard_type = "Moderate Grade"
+    elif rough_m >= 65:
+        hazard_type = "High-Roughness Rim"
+    else:
+        hazard_type = "Smooth Traverse"
+
+    safer_spot = None
+    if s >= 10:
+        best_s, best_pt = s, None
+        step = 2 / PPD  # ~3.7 km ring
+        for dlat, dlon in ((step, 0), (-step, 0), (0, step), (0, -step), (step, step), (-step, -step), (step, -step), (-step, step)):
+            nlat = max(-89.5, min(89.5, lat + dlat))
+            nlon = ((lon + dlon + 180) % 360) - 180
+            ns = slope(nlat, nlon)
+            if ns < best_s:
+                best_s = ns
+                best_pt = {"lat": round(nlat, 4), "lon": round(nlon, 4), "slope_deg": round(ns, 1)}
+        if best_pt and best_s < s - 1.5:
+            safer_spot = best_pt
+
+    if s < 10 and rough_m < 65:
+        verdict = f"Cleared ({s:.1f}° · {traction_pct}% traction) — stable regolith for Rover & Hab"
+    elif safer_spot:
+        verdict = f"{hazard_type} ({s:.1f}° · {traction_pct}% traction) — safer {safer_spot['slope_deg']}° bench ~3.7 km away"
+    else:
+        verdict = f"{hazard_type} ({s:.1f}° · {traction_pct}% traction) — reduce speed & lock differential"
+
+    return {
+        "slope_deg": round(s, 1),
+        "roughness_m": round(rough_m, 1),
+        "traction_pct": traction_pct,
+        "landing_score": landing_score,
+        "hazard_type": hazard_type,
+        "verdict": verdict,
+        "safer_spot": safer_spot,
+    }
+
+
 _ELEV_H = np.array([-7500.0, -4500.0, -2500.0, -500.0, 1500.0, 4000.0, 8500.0, 16000.0])
 _ELEV_RGB = np.array([
     [36, 52, 148],    # deep basin blue (Hellas)

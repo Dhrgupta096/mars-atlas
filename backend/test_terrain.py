@@ -1,5 +1,5 @@
 """Run: python test_terrain.py  (checks MOLA heights against published values)"""
-from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap
+from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap, ai_slope_analysis
 from route import chain_legs, safest_path, straight_line
 
 assert abs(elevation(-4.59, 137.44) - (-4501)) < 100      # Curiosity landing site, published -4,501 m
@@ -19,5 +19,7 @@ for m in ("elevation", "themis"):
 hmap = render_mola_heightmap(1, 0, 0)
 assert len(hmap) == 33 * 33 * 4
 multi = chain_legs(safest_path, [(18.44, 77.45), (18.50, 77.40), (18.55, 77.36)])
-assert multi is not None and multi["distance_m"] > 5000 and len(multi["path"]) > 20
+assert multi is not None and multi["distance_m"] > 5000 and len(multi["path"]) > 20 and "ai_slope" in multi
+ai_steep = ai_slope_analysis(-3.15, -71.85)
+assert ai_steep["hazard_type"] == "Steep Escarpment" and ai_steep["traction_pct"] < 60
 print("all terrain checks passed")
