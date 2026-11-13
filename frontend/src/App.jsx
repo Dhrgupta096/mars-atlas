@@ -2111,7 +2111,13 @@ export default function App() {
               <button
                 className="clearbtn"
                 style={{ marginTop: 6, width: '100%' }}
-                onClick={() => setFreeDrive(prev => prev ? { ...prev, lat: freeDrive.ai.safer_spot.lat, lon: freeDrive.ai.safer_spot.lon, slope: freeDrive.ai.safer_spot.slope_deg, risk: 'safe' } : prev)}
+                onClick={() => {
+                  const sp = freeDrive.ai.safer_spot
+                  setFreeDrive(prev => prev ? { ...prev, lat: sp.lat, lon: sp.lon, slope: sp.slope_deg, risk: 'safe', ai: undefined } : prev)
+                  getJson(`/api/terrain?lat=${sp.lat.toFixed(4)}&lon=${sp.lon.toFixed(4)}`)
+                    .then(t => setFreeDrive(prev => prev ? { ...prev, elev: t.elevation_m, slope: t.slope_deg, risk: t.risk, ai: t.ai_slope } : prev))
+                    .catch(() => {})
+                }}
               >
                 AI Snap → Safer {freeDrive.ai.safer_spot.slope_deg}° Bench
               </button>

@@ -216,7 +216,7 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 .compass-tape .center-tick { color: var(--oxide); font-weight: 600; border-bottom: 2px solid var(--oxide); padding-bottom: 2px; }
 .compass-readout { margin-top: 4px; font: 600 11px var(--mono); letter-spacing: .08em; color: var(--dust); }
 
-.visor-suit { position: absolute; top: 146px; left: 28px; width: 258px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--bevel), 0 16px 40px rgba(0, 0, 0, 0.65); border-radius: 12px; padding: 13px 15px; font: 11px var(--mono); }
+.visor-suit { position: absolute; top: 146px; left: 28px; width: 258px; max-height: calc(100vh - 260px); overflow-y: auto; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--bevel), 0 16px 40px rgba(0, 0, 0, 0.65); border-radius: 12px; padding: 13px 15px; font: 11px var(--mono); pointer-events: auto; }
 .suit-title { font: 600 11px var(--sans); letter-spacing: .04em; color: var(--oxide); margin-bottom: 8px; border-bottom: 1px solid var(--line); padding-bottom: 6px; }
 .suit-row { display: flex; justify-content: space-between; margin-top: 6px; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 10px; }
 .suit-row b { color: var(--dust); font-weight: 500; }
