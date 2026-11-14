@@ -83,6 +83,7 @@ cd frontend && npm install
 - **`Console`:** Full orbital mission planning workstation with shareable URL hash permalinks (`Copy Link ⎘`) and downloadable `.txt` EVA Mission Briefs.
 - **`Wrist Cuff`:** Compact astronaut forearm checklist with checkable timeline steps (`EVA-A` $\rightarrow$ `S1..S3` $\rightarrow$ `OBJ-B` $\rightarrow$ `RTB-A`), live `O2` countdown, and 1-click NASA Mastcam-Z ground photo inspection.
 - **`Visor HUD`:** First-person spacesuit helmet view (`1.8 km` altitude, `-14°` pitch, forward azimuth bearing, compass heading tape, live `O2 RESERVE` bar, GCR radiation counter, WASD free-drive rover controls, and waypoint stepper).
+- **`Field Manual` (`?`):** Searchable, categorized survival reference answering 11 core Martian engineering and dataset questions with 1-click interactive demonstrations on the 3D globe.
 
 ---
 
@@ -91,7 +92,8 @@ cd frontend && npm install
 | Layer / System | Dataset / Algorithm | Resolution / Source |
 |---|---|---|
 | **Global Topography & Slope** | NASA MGS MOLA MEGDR (`mola_32ppd.img`) | `32 px/deg` (~`1.85 km/px`), PDS Geosciences Node |
-| **High-Res Thermal & Surface Detail** | NASA Mars Odyssey THEMIS IR Day Global Mosaic v12 (`THEMIS`, `MOLA_THEMIS_blend`) | `100 m/px`, NASA / JPL / ASU / USGS Astrogeology WMS |
+| **Elemental Geochemistry & Dust Index** | NASA Mars Odyssey **GRS** (`Al`, `Ca`, `Cl`, `Fe`, `H2O`, `K`, `S`, `Si`, `Th`) + MGS **TES Dust Cover Index (`DCI_recal`)** (`data/GRS_DCI_Data.xlsx`) | `1,451` $5^\circ \times 5^\circ$ centroids (29 columns), Karunatillake et al. (2009) DOI `10.1029/2008JE003303` & Ruff & Christensen (2002) |
+| **High-Res Thermal & Surface Detail** | NASA Mars Odyssey THEMIS IR Day/Night Global Mosaic (`THEMIS`, `MOLA_THEMIS_blend`) | `100 m/px`, NASA / JPL / ASU / USGS Astrogeology WMS |
 | **Color & Shaded Relief Base Maps** | Viking MDIM 2.1 Color Mosaic + MOLA/HRSC Blended Hillshade | `232 m/px` – `463 m/px`, NASA Mars Trek WMTS & USGS |
 | **Orbital Relay Ephemeris** | NASA `MRO` (`280 km`, `92.7°`), ESA/NASA `TGO` (`400 km`, `74.0°`), NASA `Mars Odyssey` (`380 km`, `93.1°`) | Keplerian inclined orbital propagation inspired by NASA Eyes |
 | **Rover Traverse Tracks** | NASA Mars 2020 **Perseverance** (`46.1 km`, Sol 2022) & MSL **Curiosity** (`38.2 km`) | Real GeoJSON coordinates from NASA JPL MMGIS |
