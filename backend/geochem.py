@@ -247,3 +247,13 @@ def _read_xlsx(path: Path) -> list[dict]:
             item = {}
             for col, h_name in headers:
                 item[h_name] = vals.get(col)
+            out.append(item)
+    return out
+
+
+def _generate_1451_rows() -> list[dict]:
+    """Generate the 1,451 5x5° Mars Odyssey GRS pixel centroids (52.5°N to -52.5°S)."""
+    lats = [52.5 - 5.0 * i for i in range(22)]  # 22 latitude bands: 52.5 down to -52.5
+    lons_72 = [177.5 - 5.0 * j for j in range(72)]  # 72 longitude bands: 177.5 down to -177.5
+    rows = []
+    # Match the top rows of Gamma_Maps_Modified (starting at 52.5°N, 97.5°E descending)
