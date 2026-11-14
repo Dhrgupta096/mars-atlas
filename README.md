@@ -70,13 +70,9 @@ cd frontend && npm install
   - **Regional Dust Storm (`τ = 3.8`):** Cuts surface visibility to `0.6 km`, drops solar array output to `22%`, penalizes rover speed (`-45%`), and intensifies atmospheric dust haze.
   - **Solar Particle Event (`S3 Flare`):** Simulates a `18.5×` solar proton radiation spike (`~388 μSv/h`), computes the nearest high-relief bedrock escarpment/alcove (`[SHELTER]`) along the EVA path (`68–88%` rock hemisphere shielding), renders a 3D amber shelter beacon and dash line, and provides a 1-click **`Fly to Shelter →`** abort action.
 
-### 4. Habitat Base Builder & Multi-Node Microgrid Planner
-- Switch the top-left planner toggle to **`Base Builder`** to drop chained Martian outpost modules anywhere on Mars (or click **`Deploy Jezero 5-Node Outpost`**):
-  - **`HAB-1`** (`6-Crew Pressurized Surface Habitat`, `-12 kW`)
-  - **`KRUSTY`** (`40 kW Kilopower Fission Surface Power Array`, `+40 kW`)
-  - **`ISRU-1`** (`Subsurface Ice Drill & Sabatier Plant`, `-18 kW`, `+45 L/sol H2O`, `+12 kg/sol O2/CH4`)
-  - **`COMM-1`** (`High-Gain X-Band / UHF Relay Mast`, `-3 kW`)
-  - **`LAB-1`** (`Pressurized Astrobiology & Core Sample Lab`, `-6 kW`)
+### 5. Habitat Base Builder & Multi-Node Microgrid Planner
+- Switch the top-left planner toggle to **`Habitat`** to drop chained Martian outpost modules anywhere on Mars (or click **`Deploy 5-Module Jezero Base`**):
+  - **`HAB-1`** (`Pressurized Habitat Core`, `-12 kW`)
 - Each module queries real MOLA elevation and slope at its landing coordinates and links into a 3D surface microgrid with live net power (`kW`), water (`L/sol`), and propellant/oxygen (`kg/sol`) accounting.
 
 ### 5. Three Crew Interface Formats (`Console` · `Wrist Cuff` · `Visor HUD`)
