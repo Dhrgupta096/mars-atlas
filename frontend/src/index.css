@@ -795,6 +795,11 @@ html, body, #root {
   font: 500 10px/1 var(--mono);
   color: var(--muted);
   padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.grs-pills {
 .layers {
   position: static;
   display: flex;
