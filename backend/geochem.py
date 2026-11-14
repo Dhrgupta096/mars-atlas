@@ -277,3 +277,13 @@ def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
         _write_default_xlsx(XLSX_PATH, rows)
     else:
         rows = _read_xlsx(XLSX_PATH)
+        if not rows:
+            rows = _generate_1451_rows()
+            _write_default_xlsx(XLSX_PATH, rows)
+
+    # Build 36x72 (5°x5°) base grids for each element, then upsample smoothly to 180x360 (1°x1°)
+    # Row 0 = 90°N, Row 180 = 90°S; Col 0 = -180°W, Col 360 = +180°E
+    elem_keys = ["Fe", "H2O", "Si", "S", "Cl", "K", "Th", "Al", "Ca", "DCI"]
+    grids: dict[str, np.ndarray] = {}
+
+    lat_1d = np.linspace(89.5, -89.5, 180)
