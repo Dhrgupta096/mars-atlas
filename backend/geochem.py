@@ -377,3 +377,13 @@ def sample_grs_rgb(elem: str, lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
     val = (1 - dr) * ((1 - dc) * g[r0[:, None], c0[None, :]] + dc * g[r0[:, None], c1[None, :]]) + \
           dr * ((1 - dc) * g[r1[:, None], c0[None, :]] + dc * g[r1[:, None], c1[None, :]])
 
+    idx = np.clip(np.searchsorted(_GRS_Z, val) - 1, 0, len(_GRS_Z) - 2)
+    z_lo = _GRS_Z[idx]
+    t = np.clip((val - z_lo) / (_GRS_Z[idx + 1] - z_lo), 0.0, 1.0)[:, :, None]
+    return (1.0 - t) * _GRS_RGB[idx] + t * _GRS_RGB[idx + 1]
+
+
+def geochem_at(lat: float, lon: float) -> dict:
+    """Return Mars Odyssey GRS elemental z-scores, TES DCI, and geological flags at (lat, lon)."""
+    rows, grids = load_grs_dataset()
+    lon_norm = ((lon + 180.0) % 360.0) - 180.0
