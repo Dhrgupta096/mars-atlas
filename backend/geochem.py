@@ -8,3 +8,13 @@ from functools import lru_cache
 from pathlib import Path
 from xml.etree import ElementTree as ET
 import zipfile
+import numpy as np
+
+XLSX_PATH = Path(__file__).resolve().parent.parent / "data" / "GRS_DCI_Data.xlsx"
+
+HEADERS = [
+    "Latitude", "Longitude", "Al", "Ca", "Cl", "Fe", "H2O", "K", "S", "Si", "Th",
+    "DCI_recal", "Mask", "Dichotomy", "Volcanic Percent", "Midlat",
+    "Northern Lowlands", "Southern Highlands", "Non-Volcanic", "Volcanic",
+    "Cl Depleted", "Cl Enriched", "DCI Depleted", "DCI Enriched",
+    "H2O Depleted", "H2O Enriched", "S Depleted", "S Enriched", "DCI-Extrema",
