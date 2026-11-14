@@ -2336,6 +2336,11 @@ export default function App() {
                   {GRS_ELEMENTS.find(e => e.key === grsElem)?.desc}
                 </div>
                 {centerGeochem && (
+                  <div className="grs-readout">
+                    {fmtDeg(centerGeochem.centroid_lat, 'N', 'S')} {fmtDeg(centerGeochem.centroid_lon, 'E', 'W')} ·{' '}
+                    <b>{grsElem} {centerGeochem.elements[grsElem] >= 0 ? `+${centerGeochem.elements[grsElem]}` : centerGeochem.elements[grsElem]}σ</b> ·{' '}
+                    {centerGeochem.dichotomy} · Volcanic {centerGeochem.volcanic_pct}%
+                  </div>
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
               <div className="prevhead">
