@@ -68,3 +68,13 @@ def _synth_row(lat: float, lon: float) -> dict:
     wave2 = 0.31 * np.cos(pr * 3.0 + 1.1) * np.sin(lr * 2.1)
 
     fe = 1.65 * acidalia + 1.35 * utopia + 0.65 * syrtis - 0.95 * hellas - 0.55 * arabia + wave1
+    h2o = 1.95 * arabia + 1.75 * medusae + 0.85 * (abs(lat) / 52.5) ** 1.8 - 1.15 * syrtis - 0.85 * hellas + wave2
+    si = 1.25 * acidalia + 0.95 * syrtis + 0.55 * utopia - 1.10 * tharsis + 0.35 * np.cos(pr * 2.0 + lr)
+    s = 1.80 * tharsis + 1.55 * arabia + 1.35 * medusae - 0.95 * hellas - 0.70 * syrtis - wave1 * 0.6
+    cl = 1.90 * medusae + 1.50 * arabia + 1.10 * tharsis - 1.25 * utopia - 0.90 * syrtis + wave2
+    k = 1.85 * acidalia + 1.40 * utopia + 0.90 * hellas - 1.30 * tharsis - 0.75 * medusae + wave1 * 0.8
+    th = 1.75 * acidalia + 1.45 * utopia + 0.75 * syrtis - 1.25 * tharsis - 0.80 * medusae + wave1 * 0.7
+    al = 1.15 * syrtis + 0.95 * hellas - 1.10 * utopia - 0.65 * tharsis - wave2 * 0.8
+    ca = 1.25 * syrtis + 0.85 * utopia - 1.05 * arabia + 0.45 * np.sin(pr * 2.5 - lr)
+    # DCI_recal: negative = dust-covered (Tharsis, Arabia, Medusae), positive = dust-free bedrock (Syrtis, Acidalia, Hellas)
+    dci = 1.75 * syrtis + 1.40 * acidalia + 1.10 * hellas - 1.95 * tharsis - 1.65 * arabia - 1.50 * medusae + wave1 * 0.5
