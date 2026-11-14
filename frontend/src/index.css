@@ -790,6 +790,11 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.grs-chip {
+  font: 500 10px/1 var(--mono);
+  color: var(--muted);
+  padding: 4px 8px;
 .layers {
   position: static;
   display: flex;
