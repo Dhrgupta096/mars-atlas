@@ -14,7 +14,7 @@ assert slope(-3.15, -71.85) > 25                          # Valles Marineris can
 assert slope(20.95, -138.0) > 25                          # Olympus Mons basal cliff
 slope(-90, 0); slope(90, 179.99)                          # poles + date line don't crash
 assert [risk(5), risk(15), risk(30)] == ["safe", "caution", "too steep"]
-for m in ("elevation", "themis"):
+for m in ("elevation", "themis", "night_ir", "grs_Fe", "grs_H2O", "grs_DCI"):
     png = render_mola_tile(m, 1, 0, 0)
     assert png[:8] == b"\x89PNG\r\n\x1a\n" and len(png) > 2000
 hmap = render_mola_heightmap(1, 0, 0)
