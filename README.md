@@ -76,12 +76,13 @@ cd frontend && npm install
   - **`KRUSTY`** (`40 kW Kilopower Fission + Solar Array`, `+40 kW`)
   - **`ISRU-1`** (`Subsurface Ice Drill & Sabatier Plant`, `-15 kW`, `+24 L/sol H2O`, `+16 kg/sol O2/CH4`)
   - **`COMM-1`** (`15m VHF/UHF Relay Mast`, `-2 kW`)
+  - **`LAB-1`** (`Astrobiology & Core Drill Lab`, `-5 kW`)
 - Each module queries real MOLA elevation and slope at its landing coordinates and links into a 3D surface microgrid with live net power (`kW`), water (`L/sol`), and propellant/oxygen (`kg/sol`) accounting.
 
-### 5. Three Crew Interface Formats (`Console` · `Wrist Cuff` · `Visor HUD`)
+### 6. Three Crew Interface Formats (`Console` · `Wrist Cuff` · `Visor HUD`) + Interactive Field Manual (`?`)
 - **`Console`:** Full orbital mission planning workstation with shareable URL hash permalinks (`Copy Link ⎘`) and downloadable `.txt` EVA Mission Briefs.
 - **`Wrist Cuff`:** Compact astronaut forearm checklist with checkable timeline steps (`EVA-A` $\rightarrow$ `S1..S3` $\rightarrow$ `OBJ-B` $\rightarrow$ `RTB-A`), live `O2` countdown, and 1-click NASA Mastcam-Z ground photo inspection.
-- **`Visor HUD`:** First-person spacesuit helmet view (`1.8 km` altitude, `-14°` pitch, forward azimuth bearing, compass heading tape, live `O2 RESERVE` bar, GCR radiation counter, and waypoint stepper).
+- **`Visor HUD`:** First-person spacesuit helmet view (`1.8 km` altitude, `-14°` pitch, forward azimuth bearing, compass heading tape, live `O2 RESERVE` bar, GCR radiation counter, WASD free-drive rover controls, and waypoint stepper).
 
 ---
 
