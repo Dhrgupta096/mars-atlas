@@ -387,3 +387,13 @@ def geochem_at(lat: float, lon: float) -> dict:
     """Return Mars Odyssey GRS elemental z-scores, TES DCI, and geological flags at (lat, lon)."""
     rows, grids = load_grs_dataset()
     lon_norm = ((lon + 180.0) % 360.0) - 180.0
+    ri = int(np.clip(round(89.5 - lat), 0, 179))
+    ci = int(np.clip(round(lon_norm + 179.5), 0, 359))
+
+    # Find nearest centroid in the 1,451-row table
+    best_row = min(
+        rows,
+        key=lambda r: (float(r["Latitude"]) - lat) ** 2 + (((float(r["Longitude"]) - lon_norm + 180.0) % 360.0 - 180.0) ** 2),
+    )
+    elements_out = {
+        k: round(float(grids[k][ri, ci]), 2)
