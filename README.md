@@ -42,6 +42,9 @@ cd frontend && npm install
 ## Core Capabilities
 
 ### 1. 5-Layer 3D Planetary & Geochemical Globe (`1`–`5`) + Real 3D MOLA Mesh
+- **5 Authentic Global Map Layers:**
+  1. **`Imagery` (`1`):** NASA Viking MDIM 2.1 global color mosaic (`232 m/px`) fused with MOLA shaded relief.
+  2. **`THEMIS 100m` (`2`):** USGS Astrogeology / Mars Odyssey THEMIS IR Day (`100 m/px`) blended with MOLA topography.
 - **Real Inclined 3D Orbits:** Renders live 3D orbital rings and moving spacecraft markers for **MRO** (`280 km`, `92.7°`, `112 min`), **ESA/NASA Trace Gas Orbiter (`TGO`)** (`400 km`, `74.0°`, `120 min`), and **2001 Mars Odyssey** (`380 km`, `93.1°`, `118 min`).
 - **`Ride 3D →` Spacecraft Camera:** Click `Ride 3D →` next to any orbiter in the left dock to ride alongside the spacecraft in orbit above Mars.
 - **3D UHF Comm-Link Uplink Beam & MRO Sensor Swath:** Projects a live 3D nadir sensor cone and ground footprint ring beneath MRO plus a glowing 3D cyan UHF relay beam connecting the surface EVA crew or Habitat Base to the nearest relay orbiter.
