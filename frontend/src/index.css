@@ -841,6 +841,11 @@ html, body, #root {
   border-radius: 99px;
   background: linear-gradient(90deg, #202e8a 0%, #287ab8 20%, #44b298 38%, #92c674 52%, #eec44a 68%, #ec702e 84%, #d62a38 100%);
   border: 1px solid rgba(255, 255, 255, 0.16);
+}
+.grs-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 .layers {
   position: static;
   display: flex;
