@@ -1168,8 +1168,12 @@ export default function App() {
     nightIr.show = layer === 'Night-IR'
     themisBlend.show = layer === 'THEMIS 100m'
     Object.entries(v._grsLayers).forEach(([k, lyr]) => {
+      lyr.show = layer === 'Elements' && k === grsElem
+      lyr.alpha = layerOpacity
+    })
+    themisHiRes.show = layer !== 'Elevation' && layer !== 'Night-IR' && layer !== 'Elements'
     setRenderMode(viewerRef, false, visor)
-  }, [layer, layerOpacity, visor])
+  }, [layer, grsElem, layerOpacity, visor])
 
   useEffect(() => {
     const v = viewerRef.current
