@@ -102,17 +102,41 @@ function usgsWmsLayer(layerName, maxLevel = 12, minLevel = 4) {
 }
 
 let audioCtx = null
+function playTick(enabled, freq = 1380, dur = 0.014, vol = 0.032) {
+  if (!enabled || typeof window === 'undefined') return
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext
+    if (!Ctx) return
+    audioCtx = audioCtx || new Ctx()
+    if (audioCtx.state === 'suspended') audioCtx.resume()
+    const osc = audioCtx.createOscillator()
+    const gain = audioCtx.createGain()
+    osc.type = 'triangle'
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime)
+    osc.frequency.exponentialRampToValueAtTime(freq * 0.52, audioCtx.currentTime + dur)
+    gain.gain.setValueAtTime(vol, audioCtx.currentTime)
+    gain.gain.exponentialRampToValueAtTime(0.0008, audioCtx.currentTime + dur)
+    osc.connect(gain)
+    gain.connect(audioCtx.destination)
+    osc.start()
+    osc.stop(audioCtx.currentTime + dur)
+  } catch {
+    // Ignore browser autoplay restrictions
+  }
+}
+
 function playQuindar(enabled, speechText = '') {
   if (!enabled || typeof window === 'undefined') return
   try {
     const Ctx = window.AudioContext || window.webkitAudioContext
     if (Ctx) {
       audioCtx = audioCtx || new Ctx()
+      if (audioCtx.state === 'suspended') audioCtx.resume()
       const osc = audioCtx.createOscillator()
       const gain = audioCtx.createGain()
       osc.type = 'sine'
       osc.frequency.setValueAtTime(2525, audioCtx.currentTime) // NASA Apollo Quindar intro tone (2,525 Hz)
-      gain.gain.setValueAtTime(0.06, audioCtx.currentTime)
+      gain.gain.setValueAtTime(0.055, audioCtx.currentTime)
       gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.16)
       osc.connect(gain)
       gain.connect(audioCtx.destination)
@@ -510,6 +534,73 @@ function buildWhy(routeData, spec) {
   }
   return `${base} Too far for one ${spec.o2} h (${spec.short}) EVA even by rover (${safe.rover_round_trip_h.toFixed(1)} h). Needs a multi-sol expedition.`
 }
+const FAQ_ITEMS = [
+  {
+    q: 'Why can’t astronauts or rovers climb slopes steeper than 15°–20° on Mars?',
+    cat: 'Terrain & Physics',
+    a: 'Under Martian gravity (0.38g = 3.72 m/s²), normal downforce on wheels and boots drops by 62%, while loose Aeolian dust and vesicular basalt regolith cause severe Bekker sinkage. Above 15°, wheel slip exceeds 40% and crew metabolic O₂ burn doubles; above 20°, loose talus triggers slide-outs. Mars Atlas runs a live Bekker Terramechanics & AI Slope Engine that flags hazards and snaps waypoints to safer <8° benches.',
+    actionLabel: 'Load Gale → Mt. Sharp Climb →',
+    actionKey: 'gale',
+  },
+  {
+    q: 'How do astronauts survive if a rover breaks down far from the Habitat?',
+    cat: 'Survival & EVA',
+    a: 'Every EVA is governed by the NASA Walk-Back Safety Limit (drawn as the green 6 km foot limit and amber 12 km rover walk-back rings on the globe). Crew in 8h PLSS or 10h xEMU suits must always retain enough O₂ reserve to walk back to Pin A on foot if their rover fails. For deeper expeditions, switching to Buddy Rovers (16h) pairs two rovers so crew can transfer vehicles without walking back.',
+    actionLabel: 'Load Jezero Delta EVA →',
+    actionKey: 'jezero',
+  },
+  {
+    q: 'Why does the Night-IR (Thermal Inertia) layer matter for survival?',
+    cat: 'NASA Data & Layers',
+    a: 'Daytime optical cameras cannot distinguish solid bedrock from a deep dust trap covered by a thin veneer of sand. NASA Mars Odyssey’s THEMIS Night-IR (100m) measures thermal inertia at night: loose fine dust cools rapidly and appears dark (sinkage hazard), whereas exposed bedrock and cemented duricrust retain daytime heat and glow bright (high-traction safe terrain).',
+    actionLabel: 'Switch to Night-IR Layer →',
+    actionKey: 'nightir',
+  },
+  {
+    q: 'How do astronauts find underground water ice for drinking & rocket fuel (ISRU)?',
+    cat: 'Survival & EVA',
+    a: 'Liquid water boils or freezes immediately at Mars’s 6 mbar triple-point atmospheric pressure, so crews target subsurface glaciers and hydrated clay/sulfate beds mapped by MRO SHARAD radar and Odyssey Neutron Spectrometry. An ISRU Rodriguez Well melts buried ice and feeds a Sabatier reactor (CO₂ + 4H₂ → CH₄ + 2H₂O) to produce breathable O₂ and methalox return propellant.',
+    actionLabel: 'Toggle Water Ice Zones →',
+    actionKey: 'water',
+  },
+  {
+    q: 'What happens during a Solar Particle Event (S3 Flare) or Regional Dust Storm?',
+    cat: 'Survival & EVA',
+    a: 'With no global magnetosphere and an atmosphere only 0.6% as dense as Earth’s, Galactic Cosmic Rays deliver ~21 μSv/h continuously, while an S3 Solar Flare spikes radiation 18.5× (>380 μSv/h). Mars Atlas scans surrounding MOLA topography to locate the nearest high-wall crater rim, alcove, or lava tube (65%–85% sky-view shielding) and calculates the emergency rover dash time.',
+    actionLabel: 'Simulate S3 Solar Flare →',
+    actionKey: 'spe',
+  },
+  {
+    q: 'How does the A* Pathfinding Engine compute Direct vs. Safest vs. Science routes?',
+    cat: 'Terrain & Physics',
+    a: 'When you place pins on the globe, our Python backend samples the NASA MGS MOLA 32ppd (463m) Digital Elevation Model across an A* lattice. Direct follows the geodesic chord; Safest applies an exponential slope penalty above 10° to route around cliffs and crater walls; Science detours toward high-gradient geologic contacts, delta scarps, and phyllosilicate outcrops.',
+  },
+  {
+    q: 'How do crew communications work when crater walls block radio line-of-sight?',
+    cat: 'Survival & EVA',
+    a: 'Because Mars’s radius (3,396 km) is roughly half of Earth’s, the planetary horizon is much closer—a 15m Habitat VHF mast only reaches ~18 km over flat ground. Beyond the blue VHF ring or inside deep canyons, Mars Atlas tracks live Electra UHF orbital relay passes from MRO (280 km), ESA Trace Gas Orbiter (400 km), and Mars Odyssey (380 km).',
+    actionLabel: 'View 3D Orbiters →',
+    actionKey: 'orbiters',
+  },
+  {
+    q: 'How does Martian Time (Sol, MTC, LTST, and Ls) work?',
+    cat: 'Terrain & Physics',
+    a: 'One Martian solar day (Sol) lasts 24h 39m 35.244s. MTC is Coordinated Mars Time at the Airy-0 prime meridian (computed via the Allison & McEwen 2000 orbital clock), LTST is Local True Solar Time at your cursor longitude, and Ls (Solar Longitude) tracks Mars’s orbital seasons—where Ls = 180°–360° marks perihelion global dust storm season.',
+    actionLabel: 'Toggle Day/Night Terminator →',
+    actionKey: 'sunlight',
+  },
+  {
+    q: 'Where do all the maps, elevations, and live rover photos come from?',
+    cat: 'NASA Data & Layers',
+    a: 'Mars Atlas integrates 5 authentic NASA/USGS pipelines: (1) NASA Mars Trek WMTS (Viking 232m, THEMIS Night-IR 100m, MOLA Color Hillshade), (2) USGS Astrogeology WMS (THEMIS IR/VIS 100m blend), (3) NASA MGS MOLA 32ppd DEM (local binary 3D mesh & instant tile renderer), (4) NASA Mars 2020 Perseverance & Curiosity Live Raw Camera API, and (5) Curiosity’s Mount Sharp Ascent Traverse.',
+  },
+  {
+    q: 'What keyboard shortcuts and instrument hotkeys are available?',
+    cat: 'Controls & Hotkeys',
+    a: 'Operate Mars Atlas like a hardware field console: [1–4] Switch Base Map Layers · [L] Toggle Solar Terminator · [V] Enter/Exit Spacesuit Visor HUD · [C] Toggle Forearm Wrist Cuff · [H] Clean Full-Screen Globe · [M] Toggle Tactile Audio & Quindar · [R] Reset Globe View · [WASD] Free-Drive Rover in Visor · [?] Open/Close this Field Manual.',
+  },
+]
+
 function syncSunlight(ref, enabled, mars, center) {
   const v = ref.current
   if (!v) return
@@ -536,7 +627,7 @@ function syncSunlight(ref, enabled, mars, center) {
   scene.light = new Cesium.DirectionalLight({
     direction: dir,
     color: Cesium.Color.fromCssColorString(mars.dust_season ? '#ffdcb8' : '#fff5ea'),
-    intensity: mars.dust_season ? 1.9 : 2.15,
+    intensity: mars.dust_season ? 1.95 : 2.25,
   })
   // Draw solar terminator great circle (90° from subsolar point)
   const r = Math.PI / 180, phi0 = subLat * r, lam0 = subLon * r
@@ -547,11 +638,42 @@ function syncSunlight(ref, enabled, mars, center) {
     const lon = (lam0 + Math.atan2(Math.sin(az), -Math.sin(phi0) * Math.cos(az))) / r
     return [lat, ((lon + 540) % 360) - 180]
   })
-  const col = Cesium.Color.fromCssColorString(mars.dust_season ? '#f2c14e' : '#e2572b')
+  const col = Cesium.Color.fromCssColorString('#fbbf24')
   ents.add({
     polyline: {
-      positions: surfLine(term), width: 1.8, arcType: Cesium.ArcType.GEODESIC,
-      material: new Cesium.PolylineDashMaterialProperty({ color: col.withAlpha(0.55), dashLength: 14 }),
+      positions: surfLine(term), width: 3.2, arcType: Cesium.ArcType.GEODESIC, clampToGround: true,
+      material: new Cesium.PolylineGlowMaterialProperty({ color: col.withAlpha(0.75), glowPower: 0.25 }),
+    },
+  })
+  ents.add({
+    position: surfPos(subLon, subLat),
+    point: { pixelSize: 9, color: col, outlineColor: Cesium.Color.BLACK, outlineWidth: 2, heightReference: CLAMP_GND },
+    label: {
+      text: `☀ SUBSOLAR ZENITH · 12:00 LTST (Ls ${mars.ls.toFixed(1)}°)`,
+      font: '600 10px "IBM Plex Mono", ui-monospace, monospace',
+      pixelOffset: new Cesium.Cartesian2(0, -14), verticalOrigin: Cesium.VerticalOrigin.BOTTOM,
+      fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+      heightReference: CLAMP_GND, eyeOffset: EYE_OFFSET,
+    },
+  })
+  const dawnLon = ((subLon - 90 + 540) % 360) - 180
+  const duskLon = ((subLon + 90 + 540) % 360) - 180
+  ents.add({
+    position: surfPos(dawnLon, 0),
+    label: {
+      text: '☀ DAWN TERMINATOR · 06:00 LTST',
+      font: '500 9px "IBM Plex Mono", ui-monospace, monospace',
+      fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+      heightReference: CLAMP_GND, eyeOffset: EYE_OFFSET,
+    },
+  })
+  ents.add({
+    position: surfPos(duskLon, 0),
+    label: {
+      text: '☾ DUSK TERMINATOR · 18:00 LTST',
+      font: '500 9px "IBM Plex Mono", ui-monospace, monospace',
+      fillColor: col, showBackground: true, backgroundColor: LABEL_BG, backgroundPadding: LABEL_PAD,
+      heightReference: CLAMP_GND, eyeOffset: EYE_OFFSET,
     },
   })
 }
@@ -607,6 +729,11 @@ export default function App() {
   const [showHazards, setShowHazards] = useState(false)
   const [replaying, setReplaying] = useState(false)
   const [audioOn, setAudioOn] = useState(false)
+  const [sfxOn, setSfxOn] = useState(true)
+  const sfxRef = useRef(true)
+  const [faqOpen, setFaqOpen] = useState(false)
+  const [faqCat, setFaqCat] = useState('All')
+  const [faqQuery, setFaqQuery] = useState('')
   const [copied, setCopied] = useState(false)
   const [showOrbiters, setShowOrbiters] = useState(false)
   const [rideOrb, setRideOrb] = useState(null) // null | 'MRO' | 'TGO' | 'ODY'
@@ -1153,6 +1280,31 @@ export default function App() {
     setAudioOn(next)
     if (next) playQuindar(true, 'Mission Control Quindar audio online')
   }
+  const toggleSfx = () => {
+    const next = !sfxOn
+    sfxRef.current = next
+    setSfxOn(next)
+    if (next) playTick(true, 1650, 0.018, 0.045)
+  }
+  const runFaqAction = key => {
+    playTick(sfxRef.current, 1480, 0.016)
+    setFaqOpen(false)
+    if (key === 'gale') loadPreset(PRESET_EVAS[1])
+    else if (key === 'jezero') loadPreset(PRESET_EVAS[0])
+    else if (key === 'nightir') setLayer('Night-IR')
+    else if (key === 'water') {
+      setShowWater(true)
+      glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(77.45, 18.45, 4200000))
+    } else if (key === 'spe') {
+      setEnvMode('spe')
+      if (route.length < 2) loadPreset(PRESET_EVAS[0])
+    } else if (key === 'orbiters') {
+      switchLeftTab('sim')
+    } else if (key === 'sunlight') {
+      setSunlight(true)
+      glide(viewerRef.current.camera, HOME)
+    }
+  }
   const copyLink = () => {
     if (route.length < 2) return
     const ptsStr = route.map(p => `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`).join(';')
@@ -1423,14 +1575,59 @@ export default function App() {
   })
 
   useEffect(() => {
+    const layerKeys = Object.keys(LAYERS)
     const onKey = e => {
       if (e.target?.tagName === 'INPUT') return
-      if (e.key === 'h' || e.key === 'H') {
+      if (e.key === '?' || e.key === '/') {
+        e.preventDefault()
+        playTick(sfxRef.current, 1520, 0.015)
+        setFaqOpen(o => !o)
+      } else if (e.key === 'Escape') {
+        if (faqOpen) {
+          setFaqOpen(false)
+        } else if (visor) {
+          setVisor(false)
+          setFreeDrive(null)
+          viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
+        } else if (preview) {
+          setPreview(null)
+        }
+      } else if (e.key === 'h' || e.key === 'H') {
+        playTick(sfxRef.current, 1320, 0.014)
         setCleanUi(u => !u)
-      } else if (visor && e.key === 'Escape') {
-        setVisor(false)
-        setFreeDrive(null)
-        viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
+      } else if (e.key === 'l' || e.key === 'L') {
+        playTick(sfxRef.current, 1420, 0.014)
+        setSunlight(s => !s)
+      } else if (e.key === 'm' || e.key === 'M') {
+        const next = !sfxRef.current
+        sfxRef.current = next
+        setSfxOn(next)
+        if (next) playTick(true, 1650, 0.018, 0.045)
+      } else if (e.key === 'v' || e.key === 'V') {
+        playTick(sfxRef.current, 1580, 0.016)
+        if (visor) {
+          setVisor(false)
+          setFreeDrive(null)
+          viewerRef.current?.camera.flyTo({ destination: Cesium.Cartesian3.fromDegrees(vLon, vLat, 140000), duration: 1.6 })
+        } else {
+          setCuff(false)
+          setFreeDrive(null)
+          setVisorAnchor(center)
+          setVisorIdx(0)
+          setVisor(true)
+        }
+      } else if (!visor && (e.key === 'c' || e.key === 'C')) {
+        playTick(sfxRef.current, 1360, 0.014)
+        setCuff(c => !c)
+      } else if (!visor && (e.key === 'r' || e.key === 'R')) {
+        playTick(sfxRef.current, 1240, 0.015)
+        glide(viewerRef.current?.camera, HOME)
+      } else if (!visor && ['1', '2', '3', '4'].includes(e.key)) {
+        const lk = layerKeys[Number(e.key) - 1]
+        if (lk) {
+          playTick(sfxRef.current, 1180 + Number(e.key) * 90, 0.014)
+          setLayer(lk)
+        }
       } else if (visor && (e.key === 'w' || e.key === 'W')) {
         stepDriveRef.current(1, 0)
       } else if (visor && (e.key === 's' || e.key === 'S')) {
@@ -1449,7 +1646,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visor, vLat, vLon, pathLen])
+  }, [visor, vLat, vLon, pathLen, faqOpen, preview, center])
 
   const exitVisor = () => {
     setVisor(false)
@@ -1463,15 +1660,52 @@ export default function App() {
   const hSpan = Math.max(hMax - hMin, 1)
   const svgPts = (prof, W = 360, H = 56) => prof.map((h, i) => `${(i / Math.max(prof.length - 1, 1) * W).toFixed(1)},${(H - 4 - ((h - hMin) / hSpan) * (H - 8)).toFixed(1)}`).join(' ')
 
+  const sampleProfilePoint = idx => {
+    if (!activeRoute) return null
+    const n = Math.max(activeRoute.profile_m.length - 1, 1)
+    const frac = idx / n
+    const [lat, lon] = activeRoute.path[idx]
+    const elev = activeRoute.profile_m[idx]
+    const km = (activeRoute.distance_m * frac) / 1000
+    const prevIdx = Math.max(0, idx - 1)
+    const nextIdx = Math.min(n, idx + 1)
+    const dElev = Math.abs((activeRoute.profile_m[nextIdx] ?? elev) - (activeRoute.profile_m[prevIdx] ?? elev))
+    const segM = Math.max((activeRoute.distance_m / n) * Math.max(nextIdx - prevIdx, 1), 1)
+    const rawSlope = Math.atan(dElev / segM) * (180 / Math.PI)
+    const slopeDeg = Math.min(activeRoute.max_slope_deg, Number(Math.max(rawSlope, 0.8).toFixed(1)))
+    const totH = (planMode === 'walk' ? activeRoute.walk_round_trip_h : activeRoute.rover_round_trip_h) * 0.5
+    const o2Rem = Math.max(spec.o2 - totH * frac, 0)
+    return { lat, lon, elev, km, slopeDeg, o2Rem }
+  }
+
   const onProfileHover = e => {
     if (!activeRoute) return
     const rect = e.currentTarget.getBoundingClientRect()
     const frac = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1)
     const idx = Math.round(frac * (activeRoute.profile_m.length - 1))
-    setHoverIdx(idx)
-    const [lat, lon] = activeRoute.path[idx]
-    const km = (activeRoute.distance_m * (idx / Math.max(activeRoute.profile_m.length - 1, 1)) / 1000).toFixed(1)
-    setHoverMarker(viewerRef, true, lon, lat, ROUTE_COLOR[profKey], `${km} km · ${activeRoute.profile_m[idx].toLocaleString()} m`)
+    if (idx !== hoverIdx) {
+      const pitch = 980 + ((activeRoute.profile_m[idx] - hMin) / hSpan) * 520
+      playTick(sfxRef.current, pitch, 0.008, 0.02)
+      setHoverIdx(idx)
+    }
+    const pt = sampleProfilePoint(idx)
+    if (pt) {
+      setHoverMarker(
+        viewerRef,
+        true,
+        pt.lon,
+        pt.lat,
+        ROUTE_COLOR[profKey],
+        `▲ ${pt.km.toFixed(1)} km · ${pt.elev.toLocaleString()} m · ${pt.slopeDeg}° · O2 ${pt.o2Rem.toFixed(1)}h`,
+      )
+    }
+  }
+  const onProfileClick = () => {
+    if (hoverIdx === null || !activeRoute) return
+    const pt = sampleProfilePoint(hoverIdx)
+    if (!pt) return
+    playTick(sfxRef.current, 1620, 0.016)
+    glide(viewerRef.current?.camera, Cesium.Cartesian3.fromDegrees(pt.lon, pt.lat, 26000))
   }
   const onProfileLeave = () => {
     setHoverIdx(null)
@@ -1510,6 +1744,59 @@ export default function App() {
     return { kw: acc.kw + kw, h2o: acc.h2o + mod.h2o, o2: acc.o2 + mod.o2 }
   }, { kw: 0, h2o: 0, o2: 0 })
 
+  const faqCategories = ['All', 'Survival & EVA', 'Terrain & Physics', 'NASA Data & Layers', 'Controls & Hotkeys']
+  const filteredFaqs = FAQ_ITEMS.filter(item => {
+    const matchCat = faqCat === 'All' || item.cat === faqCat
+    const q = faqQuery.trim().toLowerCase()
+    const matchQ = !q || item.q.toLowerCase().includes(q) || item.a.toLowerCase().includes(q) || item.cat.toLowerCase().includes(q)
+    return matchCat && matchQ
+  })
+  const hoverPt = hoverIdx !== null ? sampleProfilePoint(hoverIdx) : null
+  const renderProfileScrubber = () => activeRoute && (
+    <div className="profile">
+      <div className="profhead">
+        <label>Elevation &amp; Slope Scrubber ({hMin.toLocaleString()}m → {hMax.toLocaleString()}m)</label>
+        <div className="proftabs">
+          {[['safe', 'Safest'], ['science', 'Science'], ['direct', 'Direct']].map(([k, lbl]) => routeData[k] && (
+            <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => { playTick(sfxRef.current, 1420, 0.014); setProfKey(k); onProfileLeave() }}>{lbl}</button>
+          ))}
+        </div>
+      </div>
+      <svg
+        viewBox="0 0 360 56"
+        className="profsvg"
+        onMouseMove={onProfileHover}
+        onMouseLeave={onProfileLeave}
+        onClick={onProfileClick}
+      >
+        {['direct', 'safe', 'science'].map(k => routeData[k] && k !== profKey && (
+          <polyline key={k} fill="none" stroke={ROUTE_COLOR[k]} strokeOpacity="0.25" strokeWidth="1.2" points={svgPts(routeData[k].profile_m)} />
+        ))}
+        <polygon fill={ROUTE_COLOR[profKey]} fillOpacity="0.14" points={`0,56 ${svgPts(activeRoute.profile_m)} 360,56`} />
+        <polyline fill="none" stroke={ROUTE_COLOR[profKey]} strokeWidth="2" points={svgPts(activeRoute.profile_m)} />
+        {hoverIdx !== null && activeRoute.profile_m[hoverIdx] !== undefined && (() => {
+          const x = (hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) * 360
+          const y = 52 - ((activeRoute.profile_m[hoverIdx] - hMin) / hSpan) * 48
+          return (
+            <g>
+              <line x1={x} y1="0" x2={x} y2="56" stroke="#f4f4f0" strokeOpacity="0.65" strokeDasharray="2 2" />
+              <circle cx={x} cy={y} r="4" fill={ROUTE_COLOR[profKey]} stroke="#09090b" strokeWidth="1.5" />
+            </g>
+          )
+        })()}
+      </svg>
+      <div className="profmeta">
+        <span>A · {activeRoute.profile_m[0]?.toLocaleString()}m</span>
+        <span style={{ color: hoverPt ? 'var(--dust)' : undefined }}>
+          {hoverPt
+            ? `${hoverPt.km.toFixed(1)} km · ${hoverPt.elev.toLocaleString()}m · ${hoverPt.slopeDeg}° · O2 ${hoverPt.o2Rem.toFixed(1)}h (Click → Fly)`
+            : 'Scrub to trace 3D beacon · Click to fly'}
+        </span>
+        <span>B · {activeRoute.profile_m.at(-1)?.toLocaleString()}m</span>
+      </div>
+    </div>
+  )
+
   return (
     <>
       <div ref={globeRef} className={`globe${envMode === 'dust' ? ' dust-haze' : ''}${envMode === 'spe' ? ' spe-haze' : ''}`} />
@@ -1522,6 +1809,59 @@ export default function App() {
           <div className="intro-actions">
             <button className="intro-primary" onClick={() => setIntro(false)}>Enter Mission Console →</button>
             <button onClick={() => loadPreset(PRESET_EVAS[0])}>Launch Jezero EVA →</button>
+          </div>
+        </div>
+      )}
+
+      {faqOpen && (
+        <div className="faq-backdrop" role="dialog" aria-modal="true" aria-label="Martian Survival FAQ and Field Manual" onClick={e => { if (e.target === e.currentTarget) setFaqOpen(false) }}>
+          <div className="faq-modal">
+            <div className="faq-head">
+              <div>
+                <div className="intro-kicker">INTERPLANETARY SURVIVAL GUIDE · FIELD MANUAL</div>
+                <h2>Martian Survival FAQ &amp; Mission Reference</h2>
+              </div>
+              <button className="closebtn" onClick={() => setFaqOpen(false)} aria-label="Close Field Manual">✕ [ESC]</button>
+            </div>
+            <div className="faq-toolbar">
+              <div className="faq-cats" role="tablist" aria-label="FAQ Categories">
+                {faqCategories.map(cat => (
+                  <button
+                    key={cat}
+                    role="tab"
+                    aria-pressed={faqCat === cat}
+                    onClick={() => { playTick(sfxRef.current, 1340, 0.012); setFaqCat(cat) }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+              <input
+                type="search"
+                className="faq-search"
+                placeholder="Filter questions (water, slope, Night-IR, O2, hotkeys…)"
+                value={faqQuery}
+                onChange={e => setFaqQuery(e.target.value)}
+                aria-label="Filter FAQ questions"
+              />
+            </div>
+            <div className="faq-grid">
+              {filteredFaqs.map((item, idx) => (
+                <article key={idx} className="faq-card">
+                  <div className="faq-card-top">
+                    <span className="faq-badge">{item.cat}</span>
+                    <span className="faq-idx">Q{String(idx + 1).padStart(2, '0')}</span>
+                  </div>
+                  <h3>{item.q}</h3>
+                  <p>{item.a}</p>
+                  {item.actionKey && (
+                    <button className="faq-act" onClick={() => runFaqAction(item.actionKey)}>
+                      {item.actionLabel}
+                    </button>
+                  )}
+                </article>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -1562,8 +1902,17 @@ export default function App() {
             MARS<span>/</span>ATLAS
           </button>
           <span className="missiontag">ORBITAL EVA PLANNER · MOLA 32PPD + THEMIS 100M</span>
-          <button className="cleanbtn" aria-pressed={cleanUi} onClick={() => setCleanUi(u => !u)} title="Hide side panels for full-screen Mars globe (Shortcut: H)">
+          <button className="cleanbtn" aria-pressed={cleanUi} onClick={() => { playTick(sfxRef.current, 1320, 0.014); setCleanUi(u => !u) }} title="Hide side panels for full-screen Mars globe (Shortcut: H)">
             {cleanUi ? 'Show UI [H]' : 'Clean Globe [H]'}
+          </button>
+          <button className="cleanbtn" aria-pressed={sunlight} onClick={() => { playTick(sfxRef.current, 1420, 0.014); setSunlight(s => !s) }} title="Toggle live Martian Day/Night Solar Terminator (Shortcut: L)">
+            ☀ Terminator [L]
+          </button>
+          <button className="cleanbtn" aria-pressed={sfxOn} onClick={toggleSfx} title="Toggle Tactile Instrument Clicks (Shortcut: M)">
+            {sfxOn ? 'SFX On [M]' : 'SFX Off [M]'}
+          </button>
+          <button className="cleanbtn faqbtn" aria-pressed={faqOpen} onClick={() => { playTick(sfxRef.current, 1520, 0.016); setFaqOpen(o => !o) }} title="Open Martian Survival FAQ & Field Manual (Shortcut: ?)">
+            ? Field Manual &amp; FAQ
           </button>
         </div>
         <dl className="clocks">
@@ -2044,44 +2393,12 @@ export default function App() {
                       }} />
                     </div>
                   )}
+                  {renderProfileScrubber()}
                 </>
               )}
               {routeTab === 'terrain' && (
                 <>
-                  {activeRoute && (
-                    <div className="profile">
-                      <div className="profhead">
-                        <label>Elevation ({hMin.toLocaleString()}m → {hMax.toLocaleString()}m)</label>
-                        <div className="proftabs">
-                          {[['safe', 'Safest'], ['science', 'Science'], ['direct', 'Direct']].map(([k, lbl]) => routeData[k] && (
-                            <button key={k} aria-pressed={profKey === k} style={{ '--c': ROUTE_COLOR[k] }} onClick={() => { setProfKey(k); onProfileLeave() }}>{lbl}</button>
-                          ))}
-                        </div>
-                      </div>
-                      <svg viewBox="0 0 360 56" className="profsvg" onMouseMove={onProfileHover} onMouseLeave={onProfileLeave}>
-                        {['direct', 'safe', 'science'].map(k => routeData[k] && k !== profKey && (
-                          <polyline key={k} fill="none" stroke={ROUTE_COLOR[k]} strokeOpacity="0.25" strokeWidth="1.2" points={svgPts(routeData[k].profile_m)} />
-                        ))}
-                        <polygon fill={ROUTE_COLOR[profKey]} fillOpacity="0.14" points={`0,56 ${svgPts(activeRoute.profile_m)} 360,56`} />
-                        <polyline fill="none" stroke={ROUTE_COLOR[profKey]} strokeWidth="2" points={svgPts(activeRoute.profile_m)} />
-                        {hoverIdx !== null && activeRoute.profile_m[hoverIdx] !== undefined && (() => {
-                          const x = (hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) * 360
-                          const y = 52 - ((activeRoute.profile_m[hoverIdx] - hMin) / hSpan) * 48
-                          return (
-                            <g>
-                              <line x1={x} y1="0" x2={x} y2="56" stroke="#e8e0d6" strokeOpacity="0.5" strokeDasharray="2 2" />
-                              <circle cx={x} cy={y} r="3.5" fill={ROUTE_COLOR[profKey]} stroke="#0d0a09" strokeWidth="1.5" />
-                            </g>
-                          )
-                        })()}
-                      </svg>
-                      <div className="profmeta">
-                        <span>A · {activeRoute.profile_m[0]?.toLocaleString()}m</span>
-                        <span>{hoverIdx !== null ? `${((activeRoute.distance_m * hoverIdx / Math.max(activeRoute.profile_m.length - 1, 1)) / 1000).toFixed(1)} km · ${activeRoute.profile_m[hoverIdx].toLocaleString()} m` : 'Hover to trace on globe'}</span>
-                        <span>B · {activeRoute.profile_m.at(-1)?.toLocaleString()}m</span>
-                      </div>
-                    </div>
-                  )}
+                  {renderProfileScrubber()}
                   {routeData.science?.stations?.length > 0 && (
                     <div className="stations">
                       <label>Apollo Science Stops (click for NASA ground photo)</label>
@@ -2301,8 +2618,15 @@ export default function App() {
             </button>
           </div>
         )}
-        {Object.keys(LAYERS).map(k => (
-          <button key={k} aria-pressed={layer === k} onClick={() => setLayer(k)}>{k}</button>
+        {Object.keys(LAYERS).map((k, idx) => (
+          <button
+            key={k}
+            aria-pressed={layer === k}
+            onClick={() => { playTick(sfxRef.current, 1180 + (idx + 1) * 90, 0.014); setLayer(k) }}
+            title={`Switch to ${k} layer (Shortcut: ${idx + 1})`}
+          >
+            {k} <em className="kbd">{idx + 1}</em>
+          </button>
         ))}
         {layer !== 'Imagery' && (
           <div className="layer-blend" title="NASA Worldview Style Layer Opacity Blend">
@@ -2310,31 +2634,31 @@ export default function App() {
             <input
               type="range" min="0.2" max="1" step="0.05"
               value={layerOpacity}
-              onChange={e => setLayerOpacity(Number(e.target.value))}
+              onChange={e => { playTick(sfxRef.current, 1020 + Number(e.target.value) * 450, 0.008, 0.018); setLayerOpacity(Number(e.target.value)) }}
               aria-label="Layer opacity blend"
             />
           </div>
         )}
         <button
           aria-pressed={terrain3d > 0}
-          onClick={() => setTerrain3d(t => (t + 1) % 4)}
+          onClick={() => { playTick(sfxRef.current, 1460, 0.014); setTerrain3d(t => (t + 1) % 4) }}
           title="Cycle real 3D MOLA terrain mesh exaggeration (2x -> 3x -> Off -> 1x)"
         >
           {terrain3d > 0 ? `3D Relief ${terrain3d}×` : '3D Relief Off'}
         </button>
         <span className="navsep" aria-hidden="true" />
-        <button aria-expanded={overlaysOpen} aria-pressed={overlaysOpen} onClick={() => setOverlaysOpen(o => !o)}>
+        <button aria-expanded={overlaysOpen} aria-pressed={overlaysOpen} onClick={() => { playTick(sfxRef.current, 1380, 0.014); setOverlaysOpen(o => !o) }}>
           Overlays {overlaysOpen ? '▾' : '▴'}
         </button>
         <span className="navsep" aria-hidden="true" />
-        <button aria-pressed={!visor && !cuff} onClick={() => { setCuff(false); if (visor) exitVisor() }}>
+        <button aria-pressed={!visor && !cuff} onClick={() => { playTick(sfxRef.current, 1300, 0.014); setCuff(false); if (visor) exitVisor() }}>
           Console
         </button>
-        <button className="cuffbtn" aria-pressed={!visor && cuff} onClick={() => { if (visor) exitVisor(); setCuff(c => !c) }}>
-          Wrist Cuff
+        <button className="cuffbtn" aria-pressed={!visor && cuff} onClick={() => { playTick(sfxRef.current, 1360, 0.014); if (visor) exitVisor(); setCuff(c => !c) }} title="Toggle Forearm Wrist Cuff (Shortcut: C)">
+          Wrist Cuff <em className="kbd">C</em>
         </button>
-        <button className="visorbtn" aria-pressed={visor} onClick={() => visor ? exitVisor() : enterVisor()}>
-          Visor HUD
+        <button className="visorbtn" aria-pressed={visor} onClick={() => { playTick(sfxRef.current, 1580, 0.016); if (visor) exitVisor(); else enterVisor() }} title="Enter/Exit Spacesuit Visor HUD (Shortcut: V)">
+          Visor HUD <em className="kbd">V</em>
         </button>
       </nav>
     </>

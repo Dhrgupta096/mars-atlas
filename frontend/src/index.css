@@ -261,6 +261,33 @@ html, body, #root { margin: 0; height: 100%; background: var(--basalt); color: v
 
 .cleanbtn { all: unset; pointer-events: auto; cursor: pointer; padding: 4px 10px; font: 500 10px var(--sans); color: var(--muted); border: 1px solid var(--line); border-radius: 999px; background: var(--surface); transition: border-color .16s, color .16s, background .16s; }
 .cleanbtn:hover, .cleanbtn[aria-pressed="true"] { border-color: var(--oxide); color: #fff; background: var(--oxide); }
+.cleanbtn.faqbtn { border-color: rgba(255, 77, 0, 0.45); color: var(--dust); }
+.cleanbtn.faqbtn:hover, .cleanbtn.faqbtn[aria-pressed="true"] { background: var(--oxide); color: #fff; }
+.kbd { font: 600 9px var(--mono); opacity: 0.55; margin-left: 3px; font-style: normal; }
+.layers button[aria-pressed="true"] .kbd { opacity: 0.75; }
+
+.faq-backdrop { position: fixed; inset: 0; z-index: 30; background: rgba(9, 9, 11, 0.76); backdrop-filter: blur(6px); display: flex; justify-content: center; align-items: center; padding: 24px; animation: panelIn .18s ease-out; }
+.faq-modal { width: 880px; max-width: 100%; max-height: calc(100vh - 48px); display: flex; flex-direction: column; background: #141417; border: 1px solid rgba(255, 255, 255, 0.14); box-shadow: var(--bevel), 0 32px 80px rgba(0, 0, 0, 0.85); border-radius: 16px; padding: 20px 22px; overflow: hidden; }
+.faq-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.faq-head h2 { margin: 4px 0 0; font: 700 19px/1.2 var(--sans); color: var(--dust); letter-spacing: -0.01em; }
+.faq-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.faq-cats { display: flex; gap: 5px; flex-wrap: wrap; }
+.faq-cats button { all: unset; cursor: pointer; padding: 5px 10px; font: 600 10px var(--sans); color: var(--muted); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; transition: background .15s, color .15s, border-color .15s; }
+.faq-cats button:hover { color: var(--dust); border-color: rgba(255, 255, 255, 0.25); }
+.faq-cats button[aria-pressed="true"] { background: var(--dust); color: var(--basalt); border-color: var(--dust); }
+.faq-search { min-width: 240px; flex: 1; max-width: 310px; padding: 6px 11px; background: rgba(255, 255, 255, 0.04); border: 1px solid var(--line); border-radius: 8px; color: var(--dust); font: 12px var(--sans); outline: none; }
+.faq-search:focus { border-color: var(--oxide); }
+.faq-grid { margin-top: 14px; overflow-y: auto; display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; padding-right: 4px; }
+@media (max-width: 760px) { .faq-grid { grid-template-columns: 1fr; } }
+.faq-card { background: rgba(255, 255, 255, 0.03); border: 1px solid var(--line); border-radius: 11px; padding: 13px 14px; display: flex; flex-direction: column; justify-content: space-between; gap: 7px; transition: border-color .16s, background .16s; }
+.faq-card:hover { border-color: rgba(255, 77, 0, 0.4); background: rgba(255, 255, 255, 0.045); }
+.faq-card-top { display: flex; justify-content: space-between; align-items: center; }
+.faq-badge { font: 600 9px var(--mono); text-transform: uppercase; letter-spacing: 0.08em; color: var(--oxide); background: rgba(255, 77, 0, 0.12); border: 1px solid rgba(255, 77, 0, 0.3); padding: 2px 7px; border-radius: 999px; }
+.faq-idx { font: 600 10px var(--mono); color: var(--muted); }
+.faq-card h3 { margin: 0; font: 600 13px/1.35 var(--sans); color: var(--dust); }
+.faq-card p { margin: 0; font: 400 11.5px/1.5 var(--sans); color: var(--muted); }
+.faq-act { all: unset; align-self: flex-start; margin-top: 3px; cursor: pointer; padding: 4px 10px; font: 600 10px var(--mono); color: var(--dust); background: rgba(255, 77, 0, 0.16); border: 1px solid rgba(255, 77, 0, 0.45); border-radius: 7px; transition: background .15s, color .15s; }
+.faq-act:hover { background: var(--oxide); color: #fff; }
 
 .overlays-menu { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; gap: 3px; padding: 6px; min-width: 185px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--bevel), 0 16px 40px rgba(0, 0, 0, 0.75); animation: panelIn .16s ease-out; }
 .overlays-menu button { text-align: left; padding: 7px 10px; border-radius: 8px; }
