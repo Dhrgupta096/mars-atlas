@@ -9,6 +9,7 @@ from fastapi import FastAPI, Query, Response
 from fastapi.staticfiles import StaticFiles
 from mars_time import mars_time
 from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap, ai_slope_analysis
+from geochem import geochem_at, ELEMENTS
 from route import straight_line, safest_path, science_path, eva_plan, slope_hazards, chain_legs
 from rovers import ROVERS
 from water import water_sites, water_at
@@ -55,7 +56,8 @@ def places():
 def terrain(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-180, le=360)):
     ai = ai_slope_analysis(lat, lon)
     return {"lat": lat, "lon": lon, "elevation_m": elevation(lat, lon), "slope_deg": ai["slope_deg"],
-            "risk": risk(ai["slope_deg"]), "ai_slope": ai, "water": water_at(lat, lon), "source": "MGS MOLA MEGDR 32 px/deg"}
+            "risk": risk(ai["slope_deg"]), "ai_slope": ai, "water": water_at(lat, lon),
+            "geochem": geochem_at(lat, lon), "source": "MGS MOLA MEGDR 32 px/deg"}
 
 
 @app.get("/api/route")
