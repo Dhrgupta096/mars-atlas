@@ -2331,6 +2331,11 @@ export default function App() {
                 <span>+2.5σ Enriched</span>
               </div>
               <div className="grs-meta">
+                <div>
+                  <b>{GRS_ELEMENTS.find(e => e.key === grsElem)?.name}:</b>{' '}
+                  {GRS_ELEMENTS.find(e => e.key === grsElem)?.desc}
+                </div>
+                {centerGeochem && (
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
               <div className="prevhead">
