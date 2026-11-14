@@ -317,3 +317,13 @@ def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
                     if k == "H2O" and polar_w > 0:
                         # Mars Odyssey GRS/HEND polar water-ice enrichment at Planum Boreum & Planum Australe
                         base_v = base_v * (1.0 - polar_w) + 2.45 * polar_w
+                    elif polar_w > 0:
+                        base_v = base_v * (1.0 - 0.25 * polar_w)
+                    grid_5deg[k][ri, ci] = base_v
+
+    # Smooth 3x3 circular wrap in longitude so 5° bin boundaries are continuous
+    for k, g5 in grid_5deg.items():
+        pad = np.pad(g5, ((1, 1), (0, 0)), mode="edge")
+        pad = np.pad(pad, ((0, 0), (1, 1)), mode="wrap")
+        smooth = (
+            pad[:-2, :-2] + 2 * pad[:-2, 1:-1] + pad[:-2, 2:] +
