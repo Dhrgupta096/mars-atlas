@@ -307,3 +307,13 @@ def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
     for ri in range(36):
         lat = 87.5 - ri * 5.0
         for ci in range(72):
+            lon = -177.5 + ci * 5.0
+            synth = _synth_row(np.clip(lat, -52.5, 52.5), lon)
+            polar_w = max(0.0, (abs(lat) - 52.5) / 37.5)
+            for k in elem_keys:
+                if np.isnan(grid_5deg[k][ri, ci]):
+                    col_name = "DCI_recal" if k == "DCI" else k
+                    base_v = float(synth[col_name])
+                    if k == "H2O" and polar_w > 0:
+                        # Mars Odyssey GRS/HEND polar water-ice enrichment at Planum Boreum & Planum Australe
+                        base_v = base_v * (1.0 - polar_w) + 2.45 * polar_w
