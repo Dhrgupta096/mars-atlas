@@ -1288,6 +1288,9 @@ export default function App() {
     if (layer !== 'Elements') return
     getJson(`/api/geochem?lat=${center.lat.toFixed(2)}&lon=${center.lon.toFixed(2)}`)
       .then(d => setCenterGeochem(d.point))
+      .catch(() => {})
+  }, [center, layer])
+
   // Live solar terminator & directional sunlight on the globe
   useEffect(() => {
     syncSunlight(viewerRef, sunlight, mars, center)
@@ -1383,6 +1386,7 @@ export default function App() {
     else if (key === 'jezero') loadPreset(PRESET_EVAS[0])
     else if (key === 'nightir') setLayer('Night-IR')
     else if (key === 'elevation') setLayer('Elevation')
+    else if (key === 'grs') setLayer('Elements')
     else if (key === 'water') {
       setShowWater(true)
       glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(77.45, 18.45, 4200000))
@@ -1713,7 +1717,7 @@ export default function App() {
       } else if (!visor && (e.key === 'r' || e.key === 'R')) {
         playTick(sfxRef.current, 1240, 0.015)
         glide(viewerRef.current?.camera, HOME)
-      } else if (!visor && ['1', '2', '3', '4'].includes(e.key)) {
+      } else if (!visor && ['1', '2', '3', '4', '5'].includes(e.key)) {
         const lk = layerKeys[Number(e.key) - 1]
         if (lk) {
           playTick(sfxRef.current, 1180 + Number(e.key) * 90, 0.014)
