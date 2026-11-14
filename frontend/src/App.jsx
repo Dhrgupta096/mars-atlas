@@ -2590,6 +2590,11 @@ export default function App() {
                     <p className="why">
                       <b>ISRU Water at B ({routeData.water.source}):</b> {routeData.water.status} — {routeData.water.detail}
                     </p>
+                  )}
+                  {routeData.geochem && (
+                    <p className="why">
+                      <b>GRS Geochemistry ({routeData.geochem.dichotomy}):</b>{' '}
+                      Fe {routeData.geochem.elements.Fe >= 0 ? `+${routeData.geochem.elements.Fe}` : routeData.geochem.elements.Fe}σ ·{' '}
                     </p>
                   )}
                   <p className="why"><b>Why this route ({spec.short}):</b> {whyText}</p>
