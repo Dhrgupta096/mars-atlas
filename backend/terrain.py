@@ -244,10 +244,9 @@ def render_mola_tile(mode: str, z: int, y: int, x: int, size: int = 256) -> byte
         shade = shade + np.clip(slope_mag * 0.42, 0.0, 0.26) - 0.04
     shade = np.clip(shade, 0.26, 1.32)[:, :, None]
 
-    if mode == "elevation":
-        knots, pal = _ELEV_H, _ELEV_RGB
-    elif mode == "night_ir":
-        knots, pal = _NIGHT_IR_H, _NIGHT_IR_RGB
+    if mode.startswith("grs_"):
+        from geochem import sample_grs_rgb
+        rgb = sample_grs_rgb(mode[4:], lats[1:-1], lons[1:-1])
     else:
         knots, pal = _RUST_H, _RUST_RGB
     rgb = np.empty((size, size, 3), dtype=np.float32)
