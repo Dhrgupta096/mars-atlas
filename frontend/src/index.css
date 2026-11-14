@@ -851,6 +851,11 @@ html, body, #root {
   border-top: 1px solid rgba(255, 255, 255, 0.07);
   padding-top: 8px;
 }
+.grs-meta b {
+  color: var(--dust);
+  font-weight: 600;
+}
+.grs-readout {
 .layers {
   position: static;
   display: flex;
