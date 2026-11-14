@@ -36,6 +36,9 @@ const GRS_ELEMENTS = [
   { key: 'K', label: 'K', name: 'Potassium (K)', desc: 'K-feldspar, illite clays & crustal incompatibility' },
   { key: 'Th', label: 'Th', name: 'Thorium (Th)', desc: 'Radiogenic heat tracer & igneous provinces' },
   { key: 'Al', label: 'Al', name: 'Aluminum (Al)', desc: 'Plagioclase feldspar & Al-smectite clays' },
+  { key: 'Ca', label: 'Ca', name: 'Calcium (Ca)', desc: 'Pyroxene basalt, gypsum & lake carbonates' },
+  { key: 'DCI', label: 'DCI', name: 'Dust Cover Index', desc: 'MGS TES dust mantle vs. exposed bedrock' },
+]
 const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d' }
 const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
 
@@ -626,6 +629,8 @@ const FAQ_ITEMS = [
     actionKey: 'elevation',
   },
   {
+    q: 'How does the Elements (GRS + DCI) geochemical globe map surface minerals and volatiles?',
+    cat: 'NASA Data & Layers',
     q: 'What keyboard shortcuts and instrument hotkeys are available?',
     cat: 'Controls & Hotkeys',
     stats: ['1–4 Map Layers', 'V Visor · C Cuff', 'WASD Rover Drive'],
