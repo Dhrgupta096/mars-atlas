@@ -254,6 +254,9 @@ def render_mola_tile(mode: str, z: int, y: int, x: int, size: int = 256) -> byte
             knots, pal = _NIGHT_IR_H, _NIGHT_IR_RGB
         else:
             knots, pal = _RUST_H, _RUST_RGB
+        rgb = np.empty((size, size, 3), dtype=np.float32)
+        for ch in range(3):
+            rgb[:, :, ch] = np.interp(h, knots, pal[:, ch])
 
     out = np.clip(rgb * shade, 0, 255).astype(np.uint8)
     return _encode_png(out)
