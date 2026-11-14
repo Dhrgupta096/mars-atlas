@@ -327,3 +327,13 @@ def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
         pad = np.pad(pad, ((0, 0), (1, 1)), mode="wrap")
         smooth = (
             pad[:-2, :-2] + 2 * pad[:-2, 1:-1] + pad[:-2, 2:] +
+            2 * pad[1:-1, :-2] + 4 * pad[1:-1, 1:-1] + 2 * pad[1:-1, 2:] +
+            pad[2:, :-2] + 2 * pad[2:, 1:-1] + pad[2:, 2:]
+        ) / 16.0
+        # Bilinear upsample from 36x72 to 180x360
+        r_f = np.clip((87.5 - lat_1d) / 5.0, 0.0, 35.0)
+        c_f = ((lon_1d + 177.5) / 5.0) % 72.0
+        r0 = np.floor(r_f).astype(np.int32)
+        r1 = np.minimum(r0 + 1, 35)
+        dr = (r_f - r0)[:, None]
+        c0 = np.floor(c_f).astype(np.int32) % 72
