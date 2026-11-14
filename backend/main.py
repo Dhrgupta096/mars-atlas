@@ -62,6 +62,7 @@ def terrain(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-
 
 @app.get("/api/geochem")
 def geochem(lat: float = Query(0.0, ge=-90, le=90), lon: float = Query(0.0, ge=-180, le=360)):
+    return {"point": geochem_at(lat, lon), "catalog": ELEMENTS}
 
 
 @app.get("/api/route")
@@ -77,7 +78,8 @@ def route(lat1: float = Query(0.0, ge=-90, le=90), lon1: float = Query(0.0, ge=-
     science = chain_legs(science_path, waypoints)
     return {"direct": direct, "safe": safe, "science": science, "plan": eva_plan(direct, safe, science),
             "hazards": slope_hazards(waypoints[0][0], waypoints[0][1], waypoints[-1][0], waypoints[-1][1]),
-            "water": water_at(waypoints[-1][0], waypoints[-1][1])}
+            "water": water_at(waypoints[-1][0], waypoints[-1][1]),
+            "geochem": geochem_at(waypoints[-1][0], waypoints[-1][1])}
 
 
 @app.get("/api/rovers")
