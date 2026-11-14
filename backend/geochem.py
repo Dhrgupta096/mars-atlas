@@ -58,3 +58,13 @@ def _synth_row(lat: float, lon: float) -> dict:
     # Regional geochemical anomalies on Mars (Acidalia/Utopia Fe-Si-K-Th high, Arabia/Medusae H2O-Cl-S high, Tharsis/Amazonis dust)
     acidalia = np.exp(-((lat - 42.0) ** 2 / 480.0 + ((lon + 32.0 + 180) % 360 - 180) ** 2 / 1400.0))
     utopia = np.exp(-((lat - 40.0) ** 2 / 520.0 + ((lon - 112.0 + 180) % 360 - 180) ** 2 / 1800.0))
+    arabia = np.exp(-((lat - 12.0) ** 2 / 550.0 + ((lon - 32.0 + 180) % 360 - 180) ** 2 / 1500.0))
+    tharsis = np.exp(-((lat - 2.0) ** 2 / 700.0 + ((lon + 112.0 + 180) % 360 - 180) ** 2 / 1900.0))
+    medusae = np.exp(-((lat + 2.0) ** 2 / 420.0 + ((lon - 165.0 + 180) % 360 - 180) ** 2 / 1600.0))
+    syrtis = np.exp(-((lat - 10.0) ** 2 / 380.0 + ((lon - 68.0 + 180) % 360 - 180) ** 2 / 900.0))
+    hellas = np.exp(-((lat + 42.0) ** 2 / 420.0 + ((lon - 70.0 + 180) % 360 - 180) ** 2 / 1200.0))
+
+    wave1 = 0.42 * np.sin(pr * 2.0 - 0.5) * np.cos(lr * 1.4)
+    wave2 = 0.31 * np.cos(pr * 3.0 + 1.1) * np.sin(lr * 2.1)
+
+    fe = 1.65 * acidalia + 1.35 * utopia + 0.65 * syrtis - 0.95 * hellas - 0.55 * arabia + wave1
