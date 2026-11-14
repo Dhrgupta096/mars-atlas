@@ -257,3 +257,13 @@ def _generate_1451_rows() -> list[dict]:
     lons_72 = [177.5 - 5.0 * j for j in range(72)]  # 72 longitude bands: 177.5 down to -177.5
     rows = []
     # Match the top rows of Gamma_Maps_Modified (starting at 52.5°N, 97.5°E descending)
+    first_lons = [97.5 - 5.0 * j for j in range(56)] + [177.5 - 5.0 * j for j in range(16)]
+    for idx_lat, lat in enumerate(lats):
+        lon_seq = first_lons if idx_lat == 0 else lons_72
+        for lon in lon_seq:
+            if len(rows) >= 1451:
+                break
+            rows.append(_synth_row(lat, lon))
+        if len(rows) >= 1451:
+            break
+    return rows
