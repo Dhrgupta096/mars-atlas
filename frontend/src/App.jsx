@@ -1149,6 +1149,11 @@ export default function App() {
       themisHiRes.contrast = 1.32
 
       v._marsLayers = { localRust, localNightIr, viking, localElev, nightIr, themisBlend, themisHiRes }
+      v._grsLayers = {}
+    }
+    if (!v._grsLayers[grsElem]) {
+      const grsLayer = layers.addImageryProvider(localTileLayer(`grs_${grsElem}`, 8), 3)
+      grsLayer.contrast = 1.12
     }
     const { localRust, localNightIr, viking, localElev, nightIr, themisBlend, themisHiRes } = v._marsLayers
     v.scene.globe.baseColor = Cesium.Color.fromCssColorString(layer === 'Night-IR' ? '#88888e' : '#6c311b')
