@@ -48,6 +48,9 @@ cd frontend && npm install
   3. **`Night-IR` (`3`):** Full-globe (`90°S` to `90°N`) thermal inertia greyscale relief showing heat-retaining exposed bedrock vs. rapid-cooling fine dust traps.
   4. **`Elevation` (`4`):** MGS MOLA 32ppd hypsometric tinting (`-7,500 m` Hellas basin blue to `+21,229 m` Olympus Mons summit white).
   5. **`Elements` (`5`):** Mars Odyssey **Gamma Ray Spectrometer (GRS)** + MGS **TES Dust Cover Index (DCI)** geochemical globe (`data/GRS_DCI_Data.xlsx` · `Gamma_Maps_Modified`, `1,451` $5^\circ \times 5^\circ$ centroids across 29 columns). Switch live between **`Fe`**, **`H₂O`**, **`Si`**, **`S`**, **`Cl`**, **`K`**, **`Th`**, **`Al`**, **`Ca`**, and **`DCI`** (`-2.5σ` depleted to `+2.5σ` enriched).
+- **Real 3D MOLA Terrain Mesh (`1×` · `2×` · `3×` · `Off`):** Streams binary 33×33 float32 MOLA heightmaps directly into Cesium's 3D vertex mesh so craters, canyons, and shield volcanoes rise in true 3D relief.
+
+### 2. NASA Eyes-Inspired 3D Orbital Telemetry (`MRO` · `TGO` · `Mars Odyssey`)
 - **Real Inclined 3D Orbits:** Renders live 3D orbital rings and moving spacecraft markers for **MRO** (`280 km`, `92.7°`, `112 min`), **ESA/NASA Trace Gas Orbiter (`TGO`)** (`400 km`, `74.0°`, `120 min`), and **2001 Mars Odyssey** (`380 km`, `93.1°`, `118 min`).
 - **`Ride 3D →` Spacecraft Camera:** Click `Ride 3D →` next to any orbiter in the left dock to ride alongside the spacecraft in orbit above Mars.
 - **3D UHF Comm-Link Uplink Beam & MRO Sensor Swath:** Projects a live 3D nadir sensor cone and ground footprint ring beneath MRO plus a glowing 3D cyan UHF relay beam connecting the surface EVA crew or Habitat Base to the nearest relay orbiter.
