@@ -357,3 +357,13 @@ _GRS_RGB = np.array([
     [236, 112,  46],  # +1.5σ Warm Vermilion (Enriched)
     [214,  42,  56],  # +2.6σ Crimson-Magenta Peak (Highly Enriched Anomaly)
 ], dtype=np.float32)
+
+
+def sample_grs_rgb(elem: str, lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
+    """Sample interpolated RGB color (H, W, 3) for given lats (H,) and lons (W,) from the GRS element grid."""
+    _, grids = load_grs_dataset()
+    key = elem if elem in grids else "Fe"
+    g = grids[key]  # shape (180, 360), row 0 = 89.5°N, col 0 = -179.5°W
+
+    r_f = np.clip(89.5 - lats, 0.0, 179.0)
+    c_f = ((lons + 180.0) % 360.0) - 0.5
