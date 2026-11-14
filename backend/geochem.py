@@ -407,3 +407,13 @@ def geochem_at(lat: float, lon: float) -> dict:
         elif v <= -1.0:
             anomalies.append(f"{k} Depleted ({v:.1f}σ)")
 
+    return {
+        "centroid_lat": best_row["Latitude"],
+        "centroid_lon": best_row["Longitude"],
+        "dichotomy": best_row.get("Dichotomy", "Northern Lowlands" if lat > 0 else "Southern Highlands"),
+        "volcanic_pct": best_row.get("Volcanic Percent", 0.0),
+        "dci_status": best_row.get("DCI-Extrema", "Nominal"),
+        "elements": elements_out,
+        "anomalies": anomalies[:4],
+        "source": "Mars Odyssey GRS + MGS TES DCI (GRS_DCI_Data.xlsx · DOI 10.1029/2008JE003303)",
+    }
