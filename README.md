@@ -1,6 +1,6 @@
 # MARS / ATLAS — Interplanetary Survival Guide: Martian Map
 
-**2026 NASA Space Apps Challenge Submission** · [Challenge Brief](https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide-martian-map/)
+**2026 NASA Space Apps Challenge Submission** · [Live Demo (`dhrgupta096.github.io/mars-atlas`)](https://dhrgupta096.github.io/mars-atlas/) · [Challenge Brief](https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide-martian-map/)
 
 **In one line:** A multi-mission 3D Martian EVA (Marswalk) planning console, 5-layer planetary & geochemical 3D globe (`Viking`, `THEMIS 100m`, `Night-IR`, `MOLA Elevation`, and `Odyssey GRS + TES DCI Elements`), NASA Eyes-style 3D orbital telemetry tracker (`MRO`, `TGO`, `Odyssey`), space-weather & dust-storm emergency survival simulator, 5-node habitat microgrid builder, forearm wrist-cuff checklist, and first-person spacesuit helmet HUD built from real NASA & ESA planetary datasets.
 

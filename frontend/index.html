@@ -2,16 +2,16 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/logo.svg?v=2" />
+    <link rel="icon" type="image/svg+xml" href="./logo.svg?v=2" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mars Atlas</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <script>window.CESIUM_BASE_URL = '/cesium/'</script>
+    <script>window.CESIUM_BASE_URL = new URL('./cesium/', window.location.href).pathname</script>
   </head>
   <body>
     <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
+    <script type="module" src="./src/main.jsx"></script>
   </body>
 </html>

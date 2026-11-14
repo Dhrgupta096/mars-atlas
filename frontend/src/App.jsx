@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as Cesium from 'cesium'
 import gsap from 'gsap'
+import { resolveStaticApi } from './staticFallback.js'
+
+const IS_STATIC_HOST =
+  typeof window !== 'undefined' && /\.github\.io$/i.test(window.location.hostname)
 
 function EarthClock({ simMs }) {
   const [t, setT] = useState(() => Date.now())
@@ -40,7 +44,12 @@ const GRS_ELEMENTS = [
   { key: 'DCI', label: 'DCI', name: 'Dust Cover Index', desc: 'MGS TES dust mantle vs. exposed bedrock' },
 ]
 const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d' }
-const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+const getJson = url =>
+  IS_STATIC_HOST
+    ? resolveStaticApi(url)
+    : fetch(url)
+        .then(r => (r.ok ? r.json() : Promise.reject(r.status)))
+        .catch(() => resolveStaticApi(url))
 
 function trekLayer({ id, maxLevel, ext = 'jpg' }) {
   return new Cesium.WebMapTileServiceImageryProvider({
@@ -60,7 +69,7 @@ function createMolaTerrainProvider(scale = 2.0) {
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
     credit: 'NASA MGS MOLA 32ppd 3D Mesh',
     callback: (x, y, level) => {
-      const z = Math.min(level, 7)
+      const z = Math.min(level, IS_STATIC_HOST ? 1 : 7)
       const sKey = `${scale}/${z}/${y}/${x}`
       const hit = _scaledHmapCache.get(sKey)
       if (hit) return hit
@@ -74,7 +83,7 @@ function createMolaTerrainProvider(scale = 2.0) {
         return scaled
       }
       if (cached instanceof Float32Array) return scaleArr(cached)
-      const p = cached ?? fetch(`/api/heightmap/${z}/${y}/${x}.bin`)
+      const p = cached ?? fetch(`./api/heightmap/${z}/${y}/${x}.bin`)
         .then(r => (r.ok ? r.arrayBuffer() : new ArrayBuffer(33 * 33 * 4)))
         .then(buf => {
           const arr = new Float32Array(buf)
@@ -90,9 +99,9 @@ function createMolaTerrainProvider(scale = 2.0) {
 
 function localTileLayer(mode, maxLevel = 8) {
   return new Cesium.UrlTemplateImageryProvider({
-    url: `/api/tiles/${mode}/{z}/{y}/{x}.png?v=4`,
+    url: `./api/tiles/${mode}/{z}/{y}/{x}.png?v=4`,
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
-    maximumLevel: maxLevel,
+    maximumLevel: IS_STATIC_HOST ? 1 : maxLevel,
     tileWidth: 256,
     tileHeight: 256,
     credit: 'NASA MGS MOLA 32ppd DEM (Local Instant Renderer)',
