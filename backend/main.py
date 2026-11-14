@@ -60,6 +60,10 @@ def terrain(lat: float = Query(..., ge=-90, le=90), lon: float = Query(..., ge=-
             "geochem": geochem_at(lat, lon), "source": "MGS MOLA MEGDR 32 px/deg"}
 
 
+@app.get("/api/geochem")
+def geochem(lat: float = Query(0.0, ge=-90, le=90), lon: float = Query(0.0, ge=-180, le=360)):
+
+
 @app.get("/api/route")
 def route(lat1: float = Query(0.0, ge=-90, le=90), lon1: float = Query(0.0, ge=-180, le=360),
           lat2: float = Query(0.0, ge=-90, le=90), lon2: float = Query(0.0, ge=-180, le=360),
