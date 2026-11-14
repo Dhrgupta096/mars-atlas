@@ -2341,6 +2341,10 @@ export default function App() {
                     <b>{grsElem} {centerGeochem.elements[grsElem] >= 0 ? `+${centerGeochem.elements[grsElem]}` : centerGeochem.elements[grsElem]}σ</b> ·{' '}
                     {centerGeochem.dichotomy} · Volcanic {centerGeochem.volcanic_pct}%
                   </div>
+                )}
+              </div>
+            </aside>
+          )}
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
               <div className="prevhead">
@@ -2585,6 +2589,7 @@ export default function App() {
                   {routeData.water && (
                     <p className="why">
                       <b>ISRU Water at B ({routeData.water.source}):</b> {routeData.water.status} — {routeData.water.detail}
+                    </p>
                     </p>
                   )}
                   <p className="why"><b>Why this route ({spec.short}):</b> {whyText}</p>
