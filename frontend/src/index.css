@@ -940,7 +940,7 @@ html, body, #root {
 
 .hint {
   position: fixed;
-  top: 18px;
+  top: 68px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 9;
@@ -958,6 +958,7 @@ html, body, #root {
   gap: 9px;
   white-space: nowrap;
 }
+.alertbar ~ .hint { top: 114px; }
 .hintdot { width: 7px; height: 7px; border-radius: 50%; background: var(--oxide); box-shadow: 0 0 10px var(--oxide); animation: pulseDot 2.4s ease-in-out infinite; }
 .clearbtn { all: unset; cursor: pointer; padding: 4px 10px; font: 600 11px var(--sans); color: var(--dust); background: rgba(255, 255, 255, 0.08); border-radius: 999px; transition: background 200ms var(--ease-fluid); }
 .clearbtn:hover { background: var(--oxide); color: #fff; }
