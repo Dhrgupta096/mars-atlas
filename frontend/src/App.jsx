@@ -636,10 +636,11 @@ const FAQ_ITEMS = [
     actionLabel: 'Try on Globe · Open Elements (GRS) Map',
     actionKey: 'grs',
   },
+  {
     q: 'What keyboard shortcuts and instrument hotkeys are available?',
     cat: 'Controls & Hotkeys',
-    stats: ['1–4 Map Layers', 'V Visor · C Cuff', 'WASD Rover Drive'],
-    a: 'Use single-key shortcuts anywhere on the map: [1–4] Switch Map Layers · [L] Solar Terminator · [V] Spacesuit Visor HUD · [C] Forearm Wrist Cuff · [H] Clean Globe · [M] Tactile Audio · [R] Reset Camera · [WASD] Free-Drive Rover · [?] Field Manual.',
+    stats: ['1–5 Map Layers', 'V Visor · C Cuff', 'WASD Rover Drive'],
+    a: 'Use single-key shortcuts anywhere on the map: [1–5] Switch Map Layers · [L] Solar Terminator · [V] Spacesuit Visor HUD · [C] Forearm Wrist Cuff · [H] Clean Globe · [M] Tactile Audio · [R] Reset Camera · [WASD] Free-Drive Rover · [?] Field Manual.',
   },
 ]
 
@@ -790,6 +791,8 @@ export default function App() {
   const [freeDrive, setFreeDrive] = useState(null) // null | { lat, lon, hdg, pitch, elev, slope, risk }
   const [leakSec, setLeakSec] = useState(null) // null | countdown seconds for O2 leak drill
   const [layerOpacity, setLayerOpacity] = useState(1.0)
+  const [grsElem, setGrsElem] = useState('Fe')
+  const [centerGeochem, setCenterGeochem] = useState(null)
   const [baseNodes, setBaseNodes] = useState([])
   const [nextMod, setNextMod] = useState('HAB-1')
   const plannerModeRef = useRef('eva')
