@@ -73,6 +73,9 @@ cd frontend && npm install
 ### 5. Habitat Base Builder & Multi-Node Microgrid Planner
 - Switch the top-left planner toggle to **`Habitat`** to drop chained Martian outpost modules anywhere on Mars (or click **`Deploy 5-Module Jezero Base`**):
   - **`HAB-1`** (`Pressurized Habitat Core`, `-12 kW`)
+  - **`KRUSTY`** (`40 kW Kilopower Fission + Solar Array`, `+40 kW`)
+  - **`ISRU-1`** (`Subsurface Ice Drill & Sabatier Plant`, `-15 kW`, `+24 L/sol H2O`, `+16 kg/sol O2/CH4`)
+  - **`COMM-1`** (`15m VHF/UHF Relay Mast`, `-2 kW`)
 - Each module queries real MOLA elevation and slope at its landing coordinates and links into a 3D surface microgrid with live net power (`kW`), water (`L/sol`), and propellant/oxygen (`kg/sol`) accounting.
 
 ### 5. Three Crew Interface Formats (`Console` · `Wrist Cuff` · `Visor HUD`)
