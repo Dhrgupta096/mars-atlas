@@ -31,6 +31,11 @@ const GRS_ELEMENTS = [
   { key: 'Fe', label: 'Fe', name: 'Iron (Fe)', desc: 'Basaltic crust, hematite & ferric oxides' },
   { key: 'H2O', label: 'H₂O', name: 'Water / Hydrogen (H₂O)', desc: 'Subsurface ice, hydrated sulfates & clays' },
   { key: 'Si', label: 'Si', name: 'Silicon (Si)', desc: 'Silicate crust, silica sinter & andesites' },
+  { key: 'S', label: 'S', name: 'Sulfur (S)', desc: 'Evaporite sulfate beds & volcanic outgassing' },
+  { key: 'Cl', label: 'Cl', name: 'Chlorine (Cl)', desc: 'Perchlorate brines & halite evaporites' },
+  { key: 'K', label: 'K', name: 'Potassium (K)', desc: 'K-feldspar, illite clays & crustal incompatibility' },
+  { key: 'Th', label: 'Th', name: 'Thorium (Th)', desc: 'Radiogenic heat tracer & igneous provinces' },
+  { key: 'Al', label: 'Al', name: 'Aluminum (Al)', desc: 'Plagioclase feldspar & Al-smectite clays' },
 const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d' }
 const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
 
