@@ -1,5 +1,6 @@
-"""Run: python test_terrain.py  (checks MOLA heights against published values)"""
+"""Run: python test_terrain.py  (checks MOLA heights, Night-IR polar tiles, and GRS_DCI_Data.xlsx geochemistry)"""
 from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap, ai_slope_analysis
+from geochem import load_grs_dataset, geochem_at, HEADERS
 from route import chain_legs, safest_path, straight_line
 
 assert abs(elevation(-4.59, 137.44) - (-4501)) < 100      # Curiosity landing site, published -4,501 m
