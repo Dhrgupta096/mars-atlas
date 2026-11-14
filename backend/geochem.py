@@ -198,3 +198,13 @@ def _write_default_xlsx(path: Path, rows: list[dict]) -> None:
         zf.writestr("xl/worksheets/sheet1.xml", "".join(sheet_lines))
 
 
+def _read_xlsx(path: Path) -> list[dict]:
+    """Parse Gamma_Maps_Modified from any standard .xlsx file using Python stdlib zipfile + ElementTree."""
+    ns = {"s": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+    with zipfile.ZipFile(path, "r") as zf:
+        shared = []
+        if "xl/sharedStrings.xml" in zf.namelist():
+            s_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+            for si in s_root.findall("s:si", ns):
+                shared.append("".join(t.text or "" for t in si.findall(".//s:t", ns)))
+        sheet_xml = zf.read("xl/worksheets/sheet1.xml")
