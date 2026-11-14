@@ -337,3 +337,13 @@ def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
         r1 = np.minimum(r0 + 1, 35)
         dr = (r_f - r0)[:, None]
         c0 = np.floor(c_f).astype(np.int32) % 72
+        c1 = (c0 + 1) % 72
+        dc = (c_f - np.floor(c_f))[None, :]
+        g180 = (1 - dr) * ((1 - dc) * smooth[r0[:, None], c0[None, :]] + dc * smooth[r0[:, None], c1[None, :]]) + \
+               dr * ((1 - dc) * smooth[r1[:, None], c0[None, :]] + dc * smooth[r1[:, None], c1[None, :]])
+        grids[k] = g180.astype(np.float32)
+
+    return rows, grids
+
+
+# Scientific Geochemical Colormap (-2.5σ Depleted -> 0σ Mean -> +2.5σ Enriched)
