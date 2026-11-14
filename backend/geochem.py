@@ -347,3 +347,13 @@ def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
 
 
 # Scientific Geochemical Colormap (-2.5σ Depleted -> 0σ Mean -> +2.5σ Enriched)
+_GRS_Z = np.array([-2.6, -1.5, -0.6, 0.0, 0.7, 1.5, 2.6], dtype=np.float32)
+_GRS_RGB = np.array([
+    [32,  46, 138],   # -2.6σ Deep Indigo-Blue (Strongly Depleted)
+    [40, 122, 184],   # -1.5σ Cerulean Cyan (Depleted)
+    [68, 178, 152],   # -0.6σ Teal-Aquamarine (Slightly Below Mean)
+    [146, 198, 116],  #  0.0σ Planetary Mean Sage-Olive
+    [238, 196,  74],  # +0.7σ Golden Amber (Moderately Enriched)
+    [236, 112,  46],  # +1.5σ Warm Vermilion (Enriched)
+    [214,  42,  56],  # +2.6σ Crimson-Magenta Peak (Highly Enriched Anomaly)
+], dtype=np.float32)
