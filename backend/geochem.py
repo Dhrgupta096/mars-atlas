@@ -118,3 +118,13 @@ def _synth_row(lat: float, lon: float) -> dict:
         "DCI Depleted": 1 if vals["DCI_recal"] <= -1.0 else 0,
         "DCI Enriched": 1 if vals["DCI_recal"] >= 1.0 else 0,
         "H2O Depleted": 1 if vals["H2O"] <= -1.0 else 0,
+        "H2O Enriched": 1 if vals["H2O"] >= 1.0 else 0,
+        "S Depleted": 1 if vals["S"] <= -1.0 else 0,
+        "S Enriched": 1 if vals["S"] >= 1.0 else 0,
+        "DCI-Extrema": "Dust Mantle (Low DCI)" if vals["DCI_recal"] <= -1.0 else "Exposed Bedrock (High DCI)" if vals["DCI_recal"] >= 1.0 else "Nominal",
+    }
+
+
+def _col_letter(idx: int) -> str:
+    """0 -> A, 25 -> Z, 26 -> AA, 28 -> AC."""
+    return chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
