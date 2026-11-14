@@ -128,3 +128,13 @@ def _synth_row(lat: float, lon: float) -> dict:
 def _col_letter(idx: int) -> str:
     """0 -> A, 25 -> Z, 26 -> AA, 28 -> AC."""
     return chr(65 + idx) if idx < 26 else "A" + chr(65 + idx - 26)
+
+
+def _write_default_xlsx(path: Path, rows: list[dict]) -> None:
+    """Write standard OpenXML .xlsx workbook with sheet 'Gamma_Maps_Modified' and 1,451 rows using stdlib zipfile."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    meta_notes = [
+        "Normalized GRS chemical Data and TES-derived Dust Cover Index (Ruff and Christensen, 2002, http://tes.asu.edu/~ruff/DCI/dci.html)",
+        "Data are normalized by the Average, Standard deviation, and the individual uncertainty, See DOI 10.1029/2008JE003303",
+        "Latitude and Longitude denote the pixel centroids",
+    ]
