@@ -2304,8 +2304,13 @@ export default function App() {
         </p>
       )}
 
-      {!visor && !cleanUi && (preview || cuff || routeData || baseNodes.length > 0) && (
+      {!intro && !visor && !cleanUi && (preview || cuff || routeData || baseNodes.length > 0 || layer === 'Elements') && (
         <div className="dock-right">
+          {layer === 'Elements' && (
+            <aside className="ui panel grs-panel" role="region" aria-label="Mars Odyssey GRS Element Selector">
+              <div className="routehead">
+                <label>Odyssey GRS · Surface Elements</label>
+                <span className="grs-chip">1,451 Cells · 5°×5°</span>
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
               <div className="prevhead">
