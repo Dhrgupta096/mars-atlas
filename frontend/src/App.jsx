@@ -2311,6 +2311,11 @@ export default function App() {
               <div className="routehead">
                 <label>Odyssey GRS · Surface Elements</label>
                 <span className="grs-chip">1,451 Cells · 5°×5°</span>
+              </div>
+              <div className="grs-pills" role="tablist" aria-label="Chemical Elements and Dust Index">
+                {GRS_ELEMENTS.map(el => (
+                  <button
+                    key={el.key}
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
               <div className="prevhead">
