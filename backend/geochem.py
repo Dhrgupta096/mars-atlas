@@ -138,3 +138,13 @@ def _write_default_xlsx(path: Path, rows: list[dict]) -> None:
         "Data are normalized by the Average, Standard deviation, and the individual uncertainty, See DOI 10.1029/2008JE003303",
         "Latitude and Longitude denote the pixel centroids",
     ]
+    sheet_lines = [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>',
+    ]
+    for r_idx, note in enumerate(meta_notes, start=1):
+        esc = note.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+        sheet_lines.append(f'<row r="{r_idx}"><c r="A{r_idx}" t="inlineStr"><is><t>{esc}</t></is></c></row>')
+
+    # Row 4: Headers
+    h_cells = []
