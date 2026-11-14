@@ -208,3 +208,12 @@ def _read_xlsx(path: Path) -> list[dict]:
             for si in s_root.findall("s:si", ns):
                 shared.append("".join(t.text or "" for t in si.findall(".//s:t", ns)))
         sheet_xml = zf.read("xl/worksheets/sheet1.xml")
+    root = ET.fromstring(sheet_xml)
+    headers = []
+    out = []
+    for row_el in root.findall(".//s:sheetData/s:row", ns):
+        r_num = int(row_el.attrib.get("r", "0"))
+        vals = {}
+        for c_el in row_el.findall("s:c", ns):
+            ref = c_el.attrib.get("r", "")
+            col_str = "".join(ch for ch in ref if ch.isalpha())
