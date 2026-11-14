@@ -810,6 +810,11 @@ html, body, #root {
 }
 .grs-pills button {
   all: unset;
+  cursor: pointer;
+  padding: 7px 4px;
+  text-align: center;
+  border-radius: 9px;
+  font: 600 11.5px/1 var(--mono);
 .layers {
   position: static;
   display: flex;
