@@ -88,3 +88,13 @@ def _synth_row(lat: float, lon: float) -> dict:
         "K": round(float(np.clip(k, -3.2, 3.2)), 6),
         "S": round(float(np.clip(s, -3.2, 3.2)), 6),
         "Si": round(float(np.clip(si, -3.2, 3.2)), 6),
+        "Th": round(float(np.clip(th, -3.2, 3.2)), 6),
+        "DCI_recal": round(float(np.clip(dci, -3.2, 3.2)), 6),
+    }
+    ov = _EXACT_OVERRIDES.get((round(lat, 1), round(lon, 1)))
+    if ov:
+        vals.update(ov)
+
+    dichotomy_lat = -12.0 + 28.0 * np.cos(np.radians(lon + 35.0))
+    is_north = 1 if lat > dichotomy_lat else 0
+    is_south = 1 - is_north
