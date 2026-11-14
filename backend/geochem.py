@@ -98,3 +98,13 @@ def _synth_row(lat: float, lon: float) -> dict:
     dichotomy_lat = -12.0 + 28.0 * np.cos(np.radians(lon + 35.0))
     is_north = 1 if lat > dichotomy_lat else 0
     is_south = 1 - is_north
+    volc_pct = round(float(np.clip((tharsis * 0.92 + medusae * 0.45 + syrtis * 0.65) * 100.0, 0.0, 100.0)), 1)
+    is_volc = 1 if volc_pct >= 35.0 else 0
+
+    return {
+        "Latitude": round(lat, 1),
+        "Longitude": round(lon, 1),
+        **vals,
+        "Mask": 1,
+        "Dichotomy": "Northern Lowlands" if is_north else "Southern Highlands",
+        "Volcanic Percent": volc_pct,
