@@ -2,7 +2,7 @@
 
 **2026 NASA Space Apps Challenge Submission** · [Challenge Brief](https://www.spaceappschallenge.org/2026/challenges/interplanetary-survival-guide-martian-map/)
 
-**In one line:** A multi-mission 3D Martian EVA (Marswalk) planning console, NASA Eyes-style 3D orbital telemetry tracker (`MRO`, `TGO`, `Odyssey`), space-weather & dust-storm emergency survival simulator, 5-node habitat microgrid builder, forearm wrist-cuff checklist, and first-person spacesuit helmet HUD built from real NASA & ESA planetary datasets.
+**In one line:** A multi-mission 3D Martian EVA (Marswalk) planning console, 5-layer planetary & geochemical 3D globe (`Viking`, `THEMIS 100m`, `Night-IR`, `MOLA Elevation`, and `Odyssey GRS + TES DCI Elements`), NASA Eyes-style 3D orbital telemetry tracker (`MRO`, `TGO`, `Odyssey`), space-weather & dust-storm emergency survival simulator, 5-node habitat microgrid builder, forearm wrist-cuff checklist, and first-person spacesuit helmet HUD built from real NASA & ESA planetary datasets.
 
 ---
 
@@ -39,19 +39,9 @@ cd frontend && npm install
 
 ---
 
-## 30-Second Automated Judge Tour (`★ Judge Tour`)
-
-Click **`★ Judge Tour`** in the top header (or **`★ 30s Judge Demo Tour →`** on the launch card) for an automated 4-stage demonstration with NASA Apollo Quindar tones and voice telemetry callouts:
-1. **Stage 1 — Jezero Delta EVA & 3D MOLA Terrain Curtain:** Loads a 3-route EVA (`Direct`, `Safest`, `High Science`) with a 3D vertical elevation curtain, VHF line-of-sight horizon ring, and Apollo walk-back safety ring.
-2. **Stage 2 — NASA Eyes MRO Ride-Along & SHARAD Nadir Swath (`60×`):** Locks the 3D camera onto the **Mars Reconnaissance Orbiter (`MRO`)** in its `280 km` near-polar orbit (`92.7°` inclination) at `60×` orbital speed, projecting its live `HiRISE / CTX / SHARAD` ground swath and `UHF Electra` comm-link uplink beam down to the crew on Mars.
-3. **Stage 3 — S3 Solar Particle Event & Escarpment Rock Shelter Abort:** Triggers a red-alert **Solar Flare (`S3 SPE`)** (`18.5×` radiation spike to `~388 μSv/h`), locates the highest-shielding bedrock alcove/escarpment along the route (`[SHELTER]`), and glides the camera to the emergency shelter.
-4. **Stage 4 — Jezero 5-Module Habitat Outpost & Microgrid:** Deploys a 5-node Martian base (`HAB-1`, `KRUSTY 40kW Kilopower`, `ISRU-1 Sabatier Ice Drill`, `COMM-1 Relay Mast`, `LAB-1 Astrobiology Lab`) connected by 3D power/data conduits with live `kW`, `L/sol H2O`, and `kg/sol O2/CH4` budgets.
-
----
-
 ## Core Capabilities
 
-### 1. NASA Eyes-Inspired 3D Orbital Telemetry (`MRO` · `TGO` · `Mars Odyssey`)
+### 1. 5-Layer 3D Planetary & Geochemical Globe (`1`–`5`) + Real 3D MOLA Mesh
 - **Real Inclined 3D Orbits:** Renders live 3D orbital rings and moving spacecraft markers for **MRO** (`280 km`, `92.7°`, `112 min`), **ESA/NASA Trace Gas Orbiter (`TGO`)** (`400 km`, `74.0°`, `120 min`), and **2001 Mars Odyssey** (`380 km`, `93.1°`, `118 min`).
 - **`Ride 3D →` Spacecraft Camera:** Click `Ride 3D →` next to any orbiter in the left dock to ride alongside the spacecraft in orbit above Mars.
 - **3D UHF Comm-Link Uplink Beam & MRO Sensor Swath:** Projects a live 3D nadir sensor cone and ground footprint ring beneath MRO plus a glowing 3D cyan UHF relay beam connecting the surface EVA crew or Habitat Base to the nearest relay orbiter.
