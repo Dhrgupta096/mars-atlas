@@ -826,6 +826,11 @@ html, body, #root {
   background: var(--dust);
   color: #09090b;
 }
+.grs-scale {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 .layers {
   position: static;
   display: flex;
