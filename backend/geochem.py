@@ -367,3 +367,13 @@ def sample_grs_rgb(elem: str, lats: np.ndarray, lons: np.ndarray) -> np.ndarray:
 
     r_f = np.clip(89.5 - lats, 0.0, 179.0)
     c_f = ((lons + 180.0) % 360.0) - 0.5
+    r0 = np.floor(r_f).astype(np.int32)
+    r1 = np.minimum(r0 + 1, 179)
+    dr = (r_f - r0)[:, None]
+    c0 = np.floor(c_f).astype(np.int32) % 360
+    c1 = (c0 + 1) % 360
+    dc = (c_f - np.floor(c_f))[None, :]
+
+    val = (1 - dr) * ((1 - dc) * g[r0[:, None], c0[None, :]] + dc * g[r0[:, None], c1[None, :]]) + \
+          dr * ((1 - dc) * g[r1[:, None], c0[None, :]] + dc * g[r1[:, None], c1[None, :]])
+
