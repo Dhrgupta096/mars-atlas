@@ -2326,6 +2326,11 @@ export default function App() {
                 ))}
               </div>
               <div className="grs-scale" title="Normalized GRS concentration z-score (σ)">
+                <span>-2.5σ Depleted</span>
+                <i className="grs-ramp" />
+                <span>+2.5σ Enriched</span>
+              </div>
+              <div className="grs-meta">
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
               <div className="prevhead">
