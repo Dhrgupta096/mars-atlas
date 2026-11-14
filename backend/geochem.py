@@ -217,3 +217,13 @@ def _read_xlsx(path: Path) -> list[dict]:
         for c_el in row_el.findall("s:c", ns):
             ref = c_el.attrib.get("r", "")
             col_str = "".join(ch for ch in ref if ch.isalpha())
+            t_attr = c_el.attrib.get("t", "")
+            if t_attr == "s":
+                v_el = c_el.find("s:v", ns)
+                val = shared[int(v_el.text)] if v_el is not None and v_el.text else ""
+            elif t_attr == "inlineStr":
+                t_el = c_el.find(".//s:t", ns)
+                val = t_el.text if t_el is not None and t_el.text else ""
+            else:
+                v_el = c_el.find("s:v", ns)
+                if v_el is None or v_el.text is None:
