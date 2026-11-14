@@ -192,7 +192,7 @@ const EYE_OFFSET = new Cesium.Cartesian3(0, 0, -3000) // 3 km toward camera: pre
 const surfPos = (lon, lat) => Cesium.Cartesian3.fromDegrees(lon, lat, 0)
 const surfLine = pairs => Cesium.Cartesian3.fromDegreesArrayHeights(pairs.flatMap(([la, lo]) => [lo, la, 0]))
 const CLAMP_GND = Cesium.HeightReference.CLAMP_TO_GROUND
-const HOME = Cesium.Cartesian3.fromDegrees(-60, 0, 1.4e7)
+const HOME = Cesium.Cartesian3.fromDegrees(77.4, 12.0, 9.8e6)
 const glide = (camera, destination) => camera.flyTo({ destination, duration: 2.8, easingFunction: Cesium.EasingFunction.QUINTIC_IN_OUT })
 const CARDINAL = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW']
 
@@ -724,7 +724,7 @@ export default function App() {
   })
   const [preview, setPreview] = useState(null) // {title, sub, image, pia, text, lat, lon}
   const [checkedSteps, setCheckedSteps] = useState({})
-  const [intro, setIntro] = useState(false)
+  const [intro, setIntro] = useState(() => !parseHashRoute())
   const [sunlight, setSunlight] = useState(false)
   const [showHazards, setShowHazards] = useState(false)
   const [replaying, setReplaying] = useState(false)
@@ -806,7 +806,6 @@ export default function App() {
     if (!initialHash) {
       glide(camera, HOME)
     }
-    const introTimer = setTimeout(() => setIntro(false), 4200)
 
     const onMove = () => {
       const c = camera.pickEllipsoid(new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2), MARS)
@@ -886,7 +885,7 @@ export default function App() {
     }
     handler.setInputAction(e => onSurfaceClick(e, false), Cesium.ScreenSpaceEventType.LEFT_CLICK)
     handler.setInputAction(e => onSurfaceClick(e, true), Cesium.ScreenSpaceEventType.LEFT_CLICK, Cesium.KeyboardEventModifier.SHIFT)
-    return () => { clearTimeout(introTimer); scene.preRender.removeEventListener(onPreRender); handler.destroy(); viewer.destroy() }
+    return () => { scene.preRender.removeEventListener(onPreRender); handler.destroy(); viewer.destroy() }
   }, [])
 
   // 2+ stops set → fetch single-leg or multi-leg chained routes
@@ -1801,16 +1800,66 @@ export default function App() {
     <>
       <div ref={globeRef} className={`globe${envMode === 'dust' ? ' dust-haze' : ''}${envMode === 'spe' ? ' spe-haze' : ''}`} />
 
-      {intro && !visor && (
-        <div className="intro-card" role="dialog" aria-label="Mission Briefing">
-          <div className="intro-kicker">ORBITAL TELEMETRY LOCK · MRO + MGS MOLA 32PPD</div>
-          <h1>MARS<span>/</span>ATLAS</h1>
-          <p>Interplanetary Survival Guide &amp; Martian EVA Route Planner</p>
-          <div className="intro-actions">
-            <button className="intro-primary" onClick={() => setIntro(false)}>Enter Mission Console →</button>
-            <button onClick={() => loadPreset(PRESET_EVAS[0])}>Launch Jezero EVA →</button>
+      {!visor && (
+        <div className="orbital-hud" aria-hidden="true">
+          <div className="orbital-ring">
+            <span className="orb-tick n">000° N · ORBITAL LOCK</span>
+            <span className="orb-tick e">090° E</span>
+            <span className="orb-tick s">180° S · MOLA 32PPD</span>
+            <span className="orb-tick w">270° W</span>
           </div>
         </div>
+      )}
+
+      {intro && !visor && (
+        <section className="hero-deck" role="dialog" aria-label="Mission Briefing">
+          <div className="hero-meta">
+            <span className="hero-tag">SYS // ORBITAL TELEMETRY LOCK</span>
+            <span>NASA MGS MOLA 32PPD · THEMIS 100M · MARS 2020 LIVE</span>
+          </div>
+          <h1 className="hero-title">MARS<span>/</span>ATLAS</h1>
+          <p className="hero-lead">
+            Interplanetary Survival Guide &amp; Autonomous Martian EVA Flight System. Real-time A* terrain routing, Bekker terramechanics, subsurface water-ice radar, and live NASA rover downlinks.
+          </p>
+          <div className="hero-telemetry">
+            <div><span>SOL DATE</span><b>{mars ? Math.floor(mars.sol_date) : '54342'}</b></div>
+            <div><span>MARS MTC</span><b>{mars?.mtc ?? '17:34:00'}</b></div>
+            <div><span>GRAVITY</span><b>3.72 m/s² (0.38g)</b></div>
+            <div><span>ELEV MESH</span><b>463m MOLA DEM</b></div>
+          </div>
+          <div className="hero-missions">
+            <button className="hero-row primary" onClick={() => { playTick(sfxRef.current, 1560, 0.016); setIntro(false) }}>
+              <span className="hero-idx">01</span>
+              <span className="hero-row-body">
+                <strong>ENTER ORBITAL FLIGHT CONSOLE</strong>
+                <small>Interactive 3D Mars Globe · A* Pathfinding · Outpost Microgrid</small>
+              </span>
+              <em className="hero-arrow">LAUNCH →</em>
+            </button>
+            <button className="hero-row" onClick={() => { playTick(sfxRef.current, 1480, 0.016); loadPreset(PRESET_EVAS[0]) }}>
+              <span className="hero-idx">02</span>
+              <span className="hero-row-body">
+                <strong>JEZERO DELTA TRAVERSE</strong>
+                <small>Perseverance Sector · 4 Waypoints · Carbonate Margin EVA</small>
+              </span>
+              <em className="hero-arrow">A → D →</em>
+            </button>
+            <button className="hero-row" onClick={() => { playTick(sfxRef.current, 1420, 0.016); loadPreset(PRESET_EVAS[1]) }}>
+              <span className="hero-idx">03</span>
+              <span className="hero-row-body">
+                <strong>GALE → MOUNT SHARP ASCENT</strong>
+                <small>Curiosity Sector · Bradbury Landing to Gediz Vallis Ridge</small>
+              </span>
+              <em className="hero-arrow">A → D →</em>
+            </button>
+          </div>
+          <div className="hero-foot">
+            <button className="hero-faq-btn" onClick={() => { playTick(sfxRef.current, 1520, 0.016); setFaqOpen(true) }}>
+              ? READ MARTIAN SURVIVAL FAQ &amp; FIELD MANUAL
+            </button>
+            <span>CLICK ANYWHERE ON MARS TO DROP PIN A</span>
+          </div>
+        </section>
       )}
 
       {faqOpen && (
@@ -1901,45 +1950,49 @@ export default function App() {
             <img src="/logo.svg" alt="" className="brand-logo" />
             MARS<span>/</span>ATLAS
           </button>
-          <span className="missiontag">ORBITAL EVA PLANNER · MOLA 32PPD + THEMIS 100M</span>
-          <button className="cleanbtn" aria-pressed={cleanUi} onClick={() => { playTick(sfxRef.current, 1320, 0.014); setCleanUi(u => !u) }} title="Hide side panels for full-screen Mars globe (Shortcut: H)">
-            {cleanUi ? 'Show UI [H]' : 'Clean Globe [H]'}
-          </button>
-          <button className="cleanbtn" aria-pressed={sunlight} onClick={() => { playTick(sfxRef.current, 1420, 0.014); setSunlight(s => !s) }} title="Toggle live Martian Day/Night Solar Terminator (Shortcut: L)">
-            ☀ Terminator [L]
-          </button>
-          <button className="cleanbtn" aria-pressed={sfxOn} onClick={toggleSfx} title="Toggle Tactile Instrument Clicks (Shortcut: M)">
-            {sfxOn ? 'SFX On [M]' : 'SFX Off [M]'}
-          </button>
-          <button className="cleanbtn faqbtn" aria-pressed={faqOpen} onClick={() => { playTick(sfxRef.current, 1520, 0.016); setFaqOpen(o => !o) }} title="Open Martian Survival FAQ & Field Manual (Shortcut: ?)">
-            ? Field Manual &amp; FAQ
-          </button>
+          <div className="top-nav">
+            <button className="cleanbtn" aria-pressed={intro} onClick={() => { playTick(sfxRef.current, 1480, 0.014); setIntro(i => !i) }} title="Toggle Hero Mission Briefing">
+              BRIEFING
+            </button>
+            <button className="cleanbtn" aria-pressed={cleanUi} onClick={() => { playTick(sfxRef.current, 1320, 0.014); setCleanUi(u => !u) }} title="Hide side panels for full-screen Mars globe (Shortcut: H)">
+              {cleanUi ? 'SHOW UI [H]' : 'CLEAN [H]'}
+            </button>
+            <button className="cleanbtn" aria-pressed={sunlight} onClick={() => { playTick(sfxRef.current, 1420, 0.014); setSunlight(s => !s) }} title="Toggle live Martian Day/Night Solar Terminator (Shortcut: L)">
+              ☀ SUN [L]
+            </button>
+            <button className="cleanbtn" aria-pressed={sfxOn} onClick={toggleSfx} title="Toggle Tactile Instrument Clicks (Shortcut: M)">
+              {sfxOn ? 'SFX ON [M]' : 'SFX OFF [M]'}
+            </button>
+            <button className="cleanbtn faqbtn" aria-pressed={faqOpen} onClick={() => { playTick(sfxRef.current, 1520, 0.016); setFaqOpen(o => !o) }} title="Open Martian Survival FAQ & Field Manual (Shortcut: ?)">
+              ? FAQ &amp; MANUAL
+            </button>
+          </div>
         </div>
         <dl className="clocks">
           <div>
-            <dt>{simMs !== null ? 'Planned EVA · Earth' : `Earth · ${EARTH_TZ}`}</dt>
+            <dt>{simMs !== null ? 'PLANNED UTC' : 'EARTH UTC'}</dt>
             <dd><EarthClock simMs={simMs} /></dd>
           </div>
-          <div><dt>Mars · MTC</dt><dd>{mars?.mtc ?? '--:--:--'}</dd></div>
-          <div><dt>Mars Year</dt><dd>{mars?.mars_year ?? '--'}</dd></div>
-          <div><dt>Sol</dt><dd>{mars ? Math.floor(mars.sol_date) : '--'}</dd></div>
+          <div><dt>MARS MTC</dt><dd>{mars?.mtc ?? '--:--:--'}</dd></div>
+          <div><dt>MY</dt><dd>{mars?.mars_year ?? '--'}</dd></div>
+          <div><dt>SOL</dt><dd>{mars ? Math.floor(mars.sol_date) : '--'}</dd></div>
           <div><dt>Ls</dt><dd>{mars ? `${mars.ls.toFixed(1)}°` : '--'}</dd></div>
         </dl>
       </header>
 
-      {!cleanUi && (
+      {!cleanUi && !intro && (
       <div className="dock-left">
         {!visor && !cuff && (
           <section className="ui panel search">
             <div className="modeswitch" role="tablist" aria-label="Left Console Section">
-              <button role="tab" aria-pressed={leftTab === 'explore'} onClick={() => switchLeftTab('explore')}>Explore</button>
-              <button role="tab" aria-pressed={leftTab === 'sim'} onClick={() => switchLeftTab('sim')}>Orbit &amp; Sim</button>
-              <button role="tab" aria-pressed={leftTab === 'base'} onClick={() => switchLeftTab('base')}>Base ({baseNodes.length})</button>
+              <button role="tab" aria-pressed={leftTab === 'explore'} onClick={() => switchLeftTab('explore')}>EXPLORE</button>
+              <button role="tab" aria-pressed={leftTab === 'sim'} onClick={() => switchLeftTab('sim')}>ORBIT &amp; SIM</button>
+              <button role="tab" aria-pressed={leftTab === 'base'} onClick={() => switchLeftTab('base')}>BASE ({baseNodes.length})</button>
             </div>
 
             {leftTab === 'explore' && (
               <>
-                <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search Mars (Jezero, Olympus…)" autoComplete="off" />
+                <input id="q" aria-label="Search Mars" value={query} onChange={e => setQuery(e.target.value)} placeholder="Search sector (Jezero, Olympus…)" autoComplete="off" />
                 {results.length > 0 ? (
                   <ul role="listbox" aria-label="Places">
                     {results.map(p => (
@@ -1948,12 +2001,12 @@ export default function App() {
                   </ul>
                 ) : (
                   <div className="quickhub">
-                    <label>1-Click EVA Missions</label>
+                    <label>MISSION TRAVERSES</label>
                     <div className="evacards">
-                      {PRESET_EVAS.map(p => (
+                      {PRESET_EVAS.map((p, idx) => (
                         <button key={p.id} onClick={() => loadPreset(p)}>
-                          <span>{p.label}</span>
-                          <em>A → B</em>
+                          <span><b>0{idx + 1}</b> {p.label}</span>
+                          <em>A → D →</em>
                         </button>
                       ))}
                     </div>
@@ -1963,10 +2016,10 @@ export default function App() {
                   <div className="rovers">
                     <div className="rovhead">
                       <button className="sectoggle" aria-expanded={roversOpen} onClick={() => setRoversOpen(o => !o)}>
-                        Rover Traverses ({rovers.length}) {roversOpen ? '▴' : '▾'}
+                        ROVER TELEMETRY ({rovers.length}) {roversOpen ? '▴' : '▾'}
                       </button>
                       <button className="toggle" aria-pressed={showRovers} onClick={() => setShowRovers(s => !s)}>
-                        {showRovers ? 'Shown' : 'Hidden'}
+                        {showRovers ? 'SHOWN' : 'HIDDEN'}
                       </button>
                     </div>
                     {roversOpen && rovers.map(rv => (
@@ -1981,7 +2034,7 @@ export default function App() {
                             onClick={() => openLiveCam(rv)}
                             title={`NASA Live Surface Raw Photos from ${rv.name}`}
                           >
-                            Live 📷
+                            LIVE 📷
                           </button>
                           {rv.waypoints.map(wp => (
                             <button
@@ -2049,8 +2102,8 @@ export default function App() {
                 </div>
                 <div className="evacards" style={{ marginTop: 4 }}>
                   <button onClick={loadJezeroBase}>
-                    <span>Deploy Jezero 5-Node Outpost</span>
-                    <em>1-Click Base</em>
+                    <span><b>01</b> Deploy Jezero 5-Node Outpost</span>
+                    <em>DEPLOY →</em>
                   </button>
                 </div>
               </div>
@@ -2060,33 +2113,34 @@ export default function App() {
 
         <section className="ui panel local" aria-live="polite">
           <div className="localhead">
-            <div className="coord">{fmtDeg(center.lat, 'N', 'S')} &nbsp; {fmtDeg(center.lon, 'E', 'W')}</div>
-            <div className="localbtns">
-              {[1, 60, 300].map(r => (
-                <button key={r} className="ratebtn" aria-pressed={timeRate === r} onClick={() => setTimeRate(r)} title={`Orbit & Time Speed ${r}x`}>
-                  {r}×
-                </button>
-              ))}
-              <button className="livebtn" aria-pressed={simMs === null && timeRate === 1} onClick={() => { setTimeRate(1); setSimMs(null) }}>
-                {simMs === null && timeRate === 1 ? '● LIVE' : '↺ LIVE'}
-              </button>
-              <button className="toggle" aria-expanded={dateOpen} onClick={() => setDateOpen(o => !o)}>
-                {dateOpen ? 'Date ▴' : 'Date ▾'}
-              </button>
+            <span className="coord">{fmtDeg(center.lat, 'N', 'S')} · {fmtDeg(center.lon, 'E', 'W')}</span>
+            <button className="livebtn" aria-pressed={simMs === null && timeRate === 1} onClick={() => { setTimeRate(1); setSimMs(null) }}>
+              {simMs === null && timeRate === 1 ? '● LIVE' : '↺ LIVE'}
+            </button>
+          </div>
+          <div className="local-main">
+            <div className="big">{mars?.ltst ?? '--:--:--'}</div>
+            <div className="sub">
+              <span style={{ color: mars?.is_day ? '#4ade80' : '#fbbf24' }}>
+                {mars ? (mars.is_day ? 'DAYLIGHT · GO' : 'NIGHT · HOLD') : '—'}
+              </span>
+              {mars && <span style={{ color: mars.dust_season ? '#fbbf24' : 'var(--muted)' }}> · {mars.dust_season ? 'Dust Season' : `${mars.season_north}`}</span>}
             </div>
           </div>
-          <div className="big">{mars?.ltst ?? '--:--:--'}</div>
-          <div className="sub">
-            Solar time ·{' '}
-            <span style={{ color: mars?.is_day ? '#5fd38d' : '#f2c14e' }}>
-              {mars ? (mars.is_day ? 'DAYLIGHT · GO' : 'NIGHT · HOLD') : '—'}
-            </span>
-            {mars && <span style={{ color: mars.dust_season ? '#f2c14e' : 'var(--muted)' }}> · {mars.dust_season ? 'Dust Season' : `${mars.season_north} (N)`}</span>}
-          </div>
           <div className="row">
-            <span>Rise <b>{mars?.sunrise_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
-            <span>Set <b>{mars?.sunset_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
-            <span>Day <b>{mars ? `${mars.daylight_hours}h` : '--'}</b></span>
+            <span>RISE <b>{mars?.sunrise_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
+            <span>SET <b>{mars?.sunset_ltst?.slice(0, 5) ?? mars?.polar ?? '--'}</b></span>
+            <span>DAY <b>{mars ? `${mars.daylight_hours}h` : '--'}</b></span>
+          </div>
+          <div className="localbtns">
+            {[1, 60, 300].map(r => (
+              <button key={r} className="ratebtn" aria-pressed={timeRate === r} onClick={() => setTimeRate(r)} title={`Orbit & Time Speed ${r}x`}>
+                {r}×
+              </button>
+            ))}
+            <button className="toggle" aria-expanded={dateOpen} onClick={() => setDateOpen(o => !o)}>
+              {dateOpen ? 'PLAN DATE ▴' : 'PLAN DATE ▾'}
+            </button>
           </div>
           {dateOpen && (
             <div className="evadate">
@@ -2109,7 +2163,7 @@ export default function App() {
       </div>
       )}
 
-      {!visor && !cuff && !cleanUi && (
+      {!visor && !cuff && !cleanUi && !intro && (
         <p className="ui hint" aria-live="polite">
           <span className="hintdot" />
           {plannerMode === 'base'
@@ -2621,6 +2675,7 @@ export default function App() {
         {Object.keys(LAYERS).map((k, idx) => (
           <button
             key={k}
+            className="layerbtn"
             aria-pressed={layer === k}
             onClick={() => { playTick(sfxRef.current, 1180 + (idx + 1) * 90, 0.014); setLayer(k) }}
             title={`Switch to ${k} layer (Shortcut: ${idx + 1})`}
@@ -2639,19 +2694,20 @@ export default function App() {
             />
           </div>
         )}
+        <span className="navsep" aria-hidden="true" />
         <button
+          className="meshbtn"
           aria-pressed={terrain3d > 0}
           onClick={() => { playTick(sfxRef.current, 1460, 0.014); setTerrain3d(t => (t + 1) % 4) }}
           title="Cycle real 3D MOLA terrain mesh exaggeration (2x -> 3x -> Off -> 1x)"
         >
-          {terrain3d > 0 ? `3D Relief ${terrain3d}×` : '3D Relief Off'}
+          {terrain3d > 0 ? `3D ${terrain3d}×` : '3D Off'}
         </button>
-        <span className="navsep" aria-hidden="true" />
-        <button aria-expanded={overlaysOpen} aria-pressed={overlaysOpen} onClick={() => { playTick(sfxRef.current, 1380, 0.014); setOverlaysOpen(o => !o) }}>
+        <button className="meshbtn" aria-expanded={overlaysOpen} aria-pressed={overlaysOpen} onClick={() => { playTick(sfxRef.current, 1380, 0.014); setOverlaysOpen(o => !o) }}>
           Overlays {overlaysOpen ? '▾' : '▴'}
         </button>
         <span className="navsep" aria-hidden="true" />
-        <button aria-pressed={!visor && !cuff} onClick={() => { playTick(sfxRef.current, 1300, 0.014); setCuff(false); if (visor) exitVisor() }}>
+        <button className="modebtn" aria-pressed={!visor && !cuff} onClick={() => { playTick(sfxRef.current, 1300, 0.014); setCuff(false); if (visor) exitVisor() }}>
           Console
         </button>
         <button className="cuffbtn" aria-pressed={!visor && cuff} onClick={() => { playTick(sfxRef.current, 1360, 0.014); if (visor) exitVisor(); setCuff(c => !c) }} title="Toggle Forearm Wrist Cuff (Shortcut: C)">
