@@ -1183,6 +1183,7 @@ export default function App() {
     if (nightIr) nightIr.alpha = 0.72 * layerOpacity
     if (localElev) localElev.alpha = layerOpacity
     if (themisBlend) themisBlend.alpha = 0.86 * layerOpacity
+    if (v._grsLayers) Object.values(v._grsLayers).forEach(lyr => { lyr.alpha = layerOpacity })
     setRenderMode(viewerRef, false, visor)
   }, [layerOpacity, visor])
 
@@ -1283,6 +1284,10 @@ export default function App() {
     return () => clearInterval(id)
   }, [center, simMs])
 
+  useEffect(() => {
+    if (layer !== 'Elements') return
+    getJson(`/api/geochem?lat=${center.lat.toFixed(2)}&lon=${center.lon.toFixed(2)}`)
+      .then(d => setCenterGeochem(d.point))
   // Live solar terminator & directional sunlight on the globe
   useEffect(() => {
     syncSunlight(viewerRef, sunlight, mars, center)
