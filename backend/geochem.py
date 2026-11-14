@@ -148,3 +148,13 @@ def _write_default_xlsx(path: Path, rows: list[dict]) -> None:
 
     # Row 4: Headers
     h_cells = []
+    for c_idx, h in enumerate(HEADERS):
+        col = _col_letter(c_idx)
+        h_cells.append(f'<c r="{col}4" t="inlineStr"><is><t>{h}</t></is></c>')
+    sheet_lines.append(f'<row r="4">{"".join(h_cells)}</row>')
+
+    # Rows 5..1455: Data
+    for r_idx, row in enumerate(rows, start=5):
+        cells = []
+        for c_idx, h in enumerate(HEADERS):
+            col = _col_letter(c_idx)
