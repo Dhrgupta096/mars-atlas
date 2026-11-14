@@ -237,3 +237,13 @@ def _read_xlsx(path: Path) -> list[dict]:
             vals[col_str] = val
         if r_num == 4 or (not headers and vals.get("A") == "Latitude"):
             headers = [(col, str(name).strip()) for col, name in vals.items() if name]
+            continue
+        if headers and vals.get("A") is not None and vals.get("B") is not None:
+            try:
+                float(vals["A"])
+                float(vals["B"])
+            except (TypeError, ValueError):
+                continue
+            item = {}
+            for col, h_name in headers:
+                item[h_name] = vals.get(col)
