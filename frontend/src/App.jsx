@@ -631,6 +631,11 @@ const FAQ_ITEMS = [
   {
     q: 'How does the Elements (GRS + DCI) geochemical globe map surface minerals and volatiles?',
     cat: 'NASA Data & Layers',
+    stats: ['1,451 5°×5° Cells', '9 GRS Elements', 'TES Dust Cover Index'],
+    a: 'Powered by the Mars Odyssey Gamma Ray Spectrometer (GRS) and MGS TES Dust Cover Index dataset (DOI 10.1029/2008JE003303), the Elements layer maps normalized σ concentrations of Fe, H₂O, Si, S, Cl, K, Th, Al, Ca, and Dust Cover across Mars.',
+    actionLabel: 'Try on Globe · Open Elements (GRS) Map',
+    actionKey: 'grs',
+  },
     q: 'What keyboard shortcuts and instrument hotkeys are available?',
     cat: 'Controls & Hotkeys',
     stats: ['1–4 Map Layers', 'V Visor · C Cuff', 'WASD Rover Drive'],
