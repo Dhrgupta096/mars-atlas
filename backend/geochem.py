@@ -78,3 +78,13 @@ def _synth_row(lat: float, lon: float) -> dict:
     ca = 1.25 * syrtis + 0.85 * utopia - 1.05 * arabia + 0.45 * np.sin(pr * 2.5 - lr)
     # DCI_recal: negative = dust-covered (Tharsis, Arabia, Medusae), positive = dust-free bedrock (Syrtis, Acidalia, Hellas)
     dci = 1.75 * syrtis + 1.40 * acidalia + 1.10 * hellas - 1.95 * tharsis - 1.65 * arabia - 1.50 * medusae + wave1 * 0.5
+
+    vals = {
+        "Al": round(float(np.clip(al, -3.2, 3.2)), 6),
+        "Ca": round(float(np.clip(ca, -3.2, 3.2)), 6),
+        "Cl": round(float(np.clip(cl, -3.2, 3.2)), 6),
+        "Fe": round(float(np.clip(fe, -3.2, 3.2)), 6),
+        "H2O": round(float(np.clip(h2o, -3.2, 3.2)), 6),
+        "K": round(float(np.clip(k, -3.2, 3.2)), 6),
+        "S": round(float(np.clip(s, -3.2, 3.2)), 6),
+        "Si": round(float(np.clip(si, -3.2, 3.2)), 6),
