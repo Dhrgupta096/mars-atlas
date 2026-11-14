@@ -2595,6 +2595,11 @@ export default function App() {
                     <p className="why">
                       <b>GRS Geochemistry ({routeData.geochem.dichotomy}):</b>{' '}
                       Fe {routeData.geochem.elements.Fe >= 0 ? `+${routeData.geochem.elements.Fe}` : routeData.geochem.elements.Fe}σ ·{' '}
+                      H₂O {routeData.geochem.elements.H2O >= 0 ? `+${routeData.geochem.elements.H2O}` : routeData.geochem.elements.H2O}σ ·{' '}
+                      Si {routeData.geochem.elements.Si >= 0 ? `+${routeData.geochem.elements.Si}` : routeData.geochem.elements.Si}σ ·{' '}
+                      S {routeData.geochem.elements.S >= 0 ? `+${routeData.geochem.elements.S}` : routeData.geochem.elements.S}σ ·{' '}
+                      Cl {routeData.geochem.elements.Cl >= 0 ? `+${routeData.geochem.elements.Cl}` : routeData.geochem.elements.Cl}σ ·{' '}
+                      DCI {routeData.geochem.elements.DCI >= 0 ? `+${routeData.geochem.elements.DCI}` : routeData.geochem.elements.DCI}σ
                     </p>
                   )}
                   <p className="why"><b>Why this route ({spec.short}):</b> {whyText}</p>
