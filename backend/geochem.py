@@ -158,3 +158,13 @@ def _write_default_xlsx(path: Path, rows: list[dict]) -> None:
         cells = []
         for c_idx, h in enumerate(HEADERS):
             col = _col_letter(c_idx)
+            val = row[h]
+            if isinstance(val, (int, float)):
+                cells.append(f'<c r="{col}{r_idx}"><v>{val}</v></c>')
+            else:
+                esc = str(val).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+                cells.append(f'<c r="{col}{r_idx}" t="inlineStr"><is><t>{esc}</t></is></c>')
+        sheet_lines.append(f'<row r="{r_idx}">{"".join(cells)}</row>')
+    sheet_lines.append("</sheetData></worksheet>")
+
+    with zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
