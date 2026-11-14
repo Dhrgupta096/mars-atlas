@@ -267,3 +267,13 @@ def _generate_1451_rows() -> list[dict]:
         if len(rows) >= 1451:
             break
     return rows
+
+
+@lru_cache(maxsize=1)
+def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
+    """Load or initialize data/GRS_DCI_Data.xlsx and pre-compute smooth 180x360 global element grids."""
+    if not XLSX_PATH.is_file():
+        rows = _generate_1451_rows()
+        _write_default_xlsx(XLSX_PATH, rows)
+    else:
+        rows = _read_xlsx(XLSX_PATH)
