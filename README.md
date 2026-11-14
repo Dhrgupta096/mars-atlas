@@ -57,7 +57,7 @@ cd frontend && npm install
 - **Time Rate Scrubber (`1×` · `60×` · `300×`):** Speed up orbital motion and watch the Mars24 day/night terminator sweep across the planet in real time.
 - **Martian Amber Limb Atmosphere:** Physically tuned `SkyAtmosphere` butterscotch-amber limb scattering and solar glow on the 3D Mars ellipsoid (`3,396.19 km` equatorial / `3,376.20 km` polar radii).
 
-### 2. Multi-Route EVA Planner (`Direct` · `Safest` · `High Science`)
+### 3. Multi-Route EVA Planner (`Direct` · `Safest` · `High Science`)
 - **3 Simultaneous Routes over MGS MOLA 32ppd DEM:**
   - **Direct** (white dashed great-circle path)
   - **Safest** (green 8-connected A* path that blocks slopes $>20^\circ$ and minimizes steep terrain)
@@ -65,7 +65,7 @@ cd frontend && npm install
 - **3D Terrain Elevation Curtain & Interactive SVG Profile:** Renders a translucent 3D elevation wall beneath the active route and syncs hover distance/elevation between the 2D SVG chart and the 3D globe.
 - **Crew & Suit Configurations:** Switch between `8h PLSS` (2-Crew Foot EVA), `10h xEMU` (Extended Foot EVA), and `Buddy Rovers` (4-Crew Dual Pressurized Rovers) to evaluate the **Apollo 4-hour emergency walk-back rule** (`6 km` foot ring / `12 km` rover ring), **VHF Habitat Line-of-Sight**, and **MSL RAD Radiation Dose (`mSv`)**.
 
-### 3. Dynamic Space Weather & Dust Storm Survival Simulator
+### 4. Dynamic Space Weather & Dust Storm Survival Simulator
 - **`Nominal` · `Dust τ=3.8` · `Solar Flare S3`:**
   - **Regional Dust Storm (`τ = 3.8`):** Cuts surface visibility to `0.6 km`, drops solar array output to `22%`, penalizes rover speed (`-45%`), and intensifies atmospheric dust haze.
   - **Solar Particle Event (`S3 Flare`):** Simulates a `18.5×` solar proton radiation spike (`~388 μSv/h`), computes the nearest high-relief bedrock escarpment/alcove (`[SHELTER]`) along the EVA path (`68–88%` rock hemisphere shielding), renders a 3D amber shelter beacon and dash line, and provides a 1-click **`Fly to Shelter →`** abort action.
