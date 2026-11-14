@@ -3,3 +3,4 @@ __pycache__/
 data/*.img
 data/tile_cache/
 .DS_Store
+ppt_assets/
