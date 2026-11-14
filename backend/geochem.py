@@ -287,3 +287,13 @@ def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
     grids: dict[str, np.ndarray] = {}
 
     lat_1d = np.linspace(89.5, -89.5, 180)
+    lon_1d = np.linspace(-179.5, 179.5, 360)
+
+    # Index rows by (lat_bin, lon_bin) on 5° grid
+    grid_5deg = {k: np.full((36, 72), np.nan, dtype=np.float32) for k in elem_keys}
+    for r in rows:
+        lat = float(r.get("Latitude", 0.0))
+        lon = float(r.get("Longitude", 0.0))
+        lon_norm = ((lon + 180.0) % 360.0) - 180.0
+        ri = int(np.clip(round((87.5 - lat) / 5.0), 0, 35))
+        ci = int(np.clip(round((lon_norm + 177.5) / 5.0), 0, 71))
