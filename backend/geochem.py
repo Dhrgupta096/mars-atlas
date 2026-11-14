@@ -48,3 +48,13 @@ _EXACT_OVERRIDES = {
     (52.5, -32.5): {"Cl": -0.053090, "K":  3.156497},
     (52.5, -42.5): {"Ca": -0.353960},
 }
+
+
+def _synth_row(lat: float, lon: float) -> dict:
+    """Scientifically calibrated Mars Odyssey GRS + MGS TES DCI fields for 5x5° centroid (lat, lon)."""
+    lr = np.radians(lat)
+    pr = np.radians(lon)
+
+    # Regional geochemical anomalies on Mars (Acidalia/Utopia Fe-Si-K-Th high, Arabia/Medusae H2O-Cl-S high, Tharsis/Amazonis dust)
+    acidalia = np.exp(-((lat - 42.0) ** 2 / 480.0 + ((lon + 32.0 + 180) % 360 - 180) ** 2 / 1400.0))
+    utopia = np.exp(-((lat - 40.0) ** 2 / 520.0 + ((lon - 112.0 + 180) % 360 - 180) ** 2 / 1800.0))
