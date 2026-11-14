@@ -1,21 +1,21 @@
 :root {
   --bg: #050507;
-  --glass: rgba(12, 12, 16, 0.76);
-  --glass-heavy: rgba(10, 10, 14, 0.88);
+  --glass: rgba(11, 13, 19, 0.76);
+  --glass-heavy: rgba(9, 11, 16, 0.9);
   --shell: rgba(255, 255, 255, 0.035);
-  --shell-border: rgba(255, 255, 255, 0.08);
+  --shell-border: rgba(255, 255, 255, 0.085);
   --surface: rgba(255, 255, 255, 0.045);
-  --surface-hover: rgba(255, 255, 255, 0.08);
-  --dust: #f6f5f2;
-  --muted: #9a99a2;
-  --oxide: #ff5520;
-  --oxide-soft: rgba(255, 85, 32, 0.16);
+  --surface-hover: rgba(255, 255, 255, 0.085);
+  --dust: #f4f6fa;
+  --muted: #9499a6;
+  --oxide: #38bdf8;
+  --oxide-soft: rgba(56, 189, 248, 0.14);
   --amber: #fbbf24;
   --mint: #34d399;
   --sky: #38bdf8;
   --line: rgba(255, 255, 255, 0.08);
-  --inner-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.12);
-  --ambient-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.78);
+  --inner-glow: inset 0 1px 0 0 rgba(255, 255, 255, 0.14);
+  --ambient-shadow: 0 24px 60px -12px rgba(0, 0, 0, 0.8);
   --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
   --sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
   --serif: 'Instrument Serif', Georgia, serif;
@@ -243,22 +243,23 @@ html, body, #root {
   gap: 14px;
   padding: 8px 8px 8px 24px;
   border-radius: 999px;
-  background: linear-gradient(135deg, #ff5d29 0%, #e63e0b 100%);
-  color: #ffffff;
-  font: 600 14px/1 var(--sans);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.32), 0 16px 38px -8px rgba(255, 85, 32, 0.55);
+  background: linear-gradient(135deg, #ffffff 0%, #e0f2fe 100%);
+  color: #050507;
+  font: 700 14px/1 var(--sans);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.8), 0 16px 38px -8px rgba(56, 189, 248, 0.38);
   transition: transform 450ms var(--ease-fluid), box-shadow 450ms var(--ease-fluid);
 }
 .primary-pill-cta:hover {
   transform: translateY(-1px) scale(1.015);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.4), 0 22px 46px -8px rgba(255, 85, 32, 0.72);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.9), 0 22px 46px -8px rgba(56, 189, 248, 0.55);
 }
 .primary-pill-cta:active { transform: scale(0.98); }
 .primary-pill-cta .cta-circle {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.22);
+  background: #050507;
+  color: #38bdf8;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -267,7 +268,7 @@ html, body, #root {
 }
 .primary-pill-cta:hover .cta-circle {
   transform: translate(2px, -2px) scale(1.06);
-  background: rgba(0, 0, 0, 0.32);
+  background: #0a101d;
 }
 
 .secondary-pill-cta {
@@ -442,13 +443,14 @@ html, body, #root {
   background: rgba(255, 255, 255, 0.11);
 }
 .cleanbtn.faqbtn {
-  color: #fff;
-  background: var(--oxide-soft);
-  border: 1px solid rgba(255, 85, 32, 0.35);
+  color: #e0f2fe;
+  background: rgba(56, 189, 248, 0.14);
+  border: 1px solid rgba(56, 189, 248, 0.35);
 }
 .cleanbtn.faqbtn:hover, .cleanbtn.faqbtn[aria-pressed="true"] {
-  background: var(--oxide);
-  color: #fff;
+  background: #38bdf8;
+  color: #050507;
+  font-weight: 700;
 }
 
 /* ==========================================
@@ -552,7 +554,7 @@ html, body, #root {
   transition: border-color 250ms var(--ease-fluid), background 250ms var(--ease-fluid);
 }
 .search input:focus {
-  border-color: rgba(255, 85, 32, 0.6);
+  border-color: rgba(56, 189, 248, 0.55);
   background: rgba(255, 255, 255, 0.07);
 }
 .search input::placeholder { color: var(--muted); }
@@ -592,7 +594,7 @@ html, body, #root {
 }
 .evacards button:hover {
   background: var(--surface-hover);
-  border-color: rgba(255, 85, 32, 0.4);
+  border-color: rgba(56, 189, 248, 0.38);
   transform: translateY(-1px);
 }
 .card-arrow {
@@ -610,8 +612,8 @@ html, body, #root {
 }
 .evacards button:hover .card-arrow {
   transform: translate(1px, -1px);
-  background: var(--oxide);
-  color: #fff;
+  background: var(--dust);
+  color: #09090b;
 }
 
 .chipgrid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-top: 8px; }
@@ -816,10 +818,10 @@ html, body, #root {
   background: rgba(255, 255, 255, 0.06);
 }
 .layers button.layerbtn[aria-pressed="true"] {
-  color: #fff;
-  background: var(--oxide);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.14);
   font-weight: 600;
-  box-shadow: 0 4px 14px rgba(255, 85, 32, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.26), 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 .layers button.meshbtn[aria-pressed="true"] {
   color: var(--amber);
@@ -878,7 +880,7 @@ html, body, #root {
 .routehead { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .crewbar { display: flex; gap: 4px; margin-top: 10px; background: rgba(255, 255, 255, 0.04); padding: 4px; border-radius: 999px; }
 .crewbar button { all: unset; flex: 1; text-align: center; cursor: pointer; padding: 6px 8px; font: 600 11px var(--sans); border-radius: 999px; color: var(--muted); transition: background 250ms var(--ease-fluid), color 250ms var(--ease-fluid); }
-.crewbar button[aria-pressed="true"] { color: #fff; background: var(--oxide); }
+.crewbar button[aria-pressed="true"] { color: #09090b; background: var(--dust); }
 .routetabs { display: flex; gap: 4px; margin-top: 10px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
 .routetabs button { all: unset; flex: 1; text-align: center; cursor: pointer; padding: 6px 8px; font: 500 11.5px var(--sans); color: var(--muted); border-radius: 999px; transition: background 250ms var(--ease-fluid), color 250ms var(--ease-fluid); }
 .routetabs button[aria-selected="true"] { color: var(--dust); background: rgba(255, 255, 255, 0.09); font-weight: 600; }
@@ -961,13 +963,13 @@ html, body, #root {
 .alertbar ~ .hint { top: 114px; }
 .hintdot { width: 7px; height: 7px; border-radius: 50%; background: var(--oxide); box-shadow: 0 0 10px var(--oxide); animation: pulseDot 2.4s ease-in-out infinite; }
 .clearbtn { all: unset; cursor: pointer; padding: 4px 10px; font: 600 11px var(--sans); color: var(--dust); background: rgba(255, 255, 255, 0.08); border-radius: 999px; transition: background 200ms var(--ease-fluid); }
-.clearbtn:hover { background: var(--oxide); color: #fff; }
+.clearbtn:hover { background: var(--oxide); color: #050507; }
 
 .routeactions { display: grid; grid-template-columns: 1fr 1fr 1.15fr; gap: 6px; margin-top: 12px; }
 .replaybtn, .sharebtn { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 9px 8px; text-align: center; cursor: pointer; font: 600 11px var(--sans); color: var(--dust); background: var(--surface); border-radius: 999px; transition: background 200ms var(--ease-fluid); }
 .replaybtn:hover, .sharebtn:hover { background: var(--surface-hover); }
 .replaybtn[aria-pressed="true"] { color: #09090b; background: var(--amber); }
-.visorlaunch { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 9px 8px; text-align: center; cursor: pointer; font: 600 11px var(--sans); color: #fff; background: var(--oxide); border-radius: 999px; transition: opacity 200ms var(--ease-fluid); }
+.visorlaunch { all: unset; box-sizing: border-box; display: block; width: 100%; padding: 9px 8px; text-align: center; cursor: pointer; font: 700 11px var(--sans); color: #050507; background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%); border-radius: 999px; transition: opacity 200ms var(--ease-fluid); }
 .visorlaunch:hover { opacity: 0.92; }
 
 .cuff { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
@@ -986,7 +988,7 @@ html, body, #root {
 .cuffimgbtn { all: unset; cursor: pointer; padding: 3px 8px; font: 600 9.5px var(--mono); color: var(--amber); background: rgba(251, 191, 36, 0.12); border-radius: 999px; }
 .cuffactions { display: grid; grid-template-columns: 1fr 1fr 1.2fr auto; gap: 6px; margin-top: 12px; }
 .cuffactions button { all: unset; cursor: pointer; padding: 9px 8px; text-align: center; font: 600 11px var(--sans); border-radius: 999px; color: var(--dust); background: var(--surface); }
-.cuffactions .cuffvisor { background: var(--oxide); color: #fff; }
+.cuffactions .cuffvisor { background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%); color: #050507; font-weight: 700; }
 
 /* ==========================================
    SPACESUIT VISOR HUD & MODAL
@@ -1010,9 +1012,9 @@ html, body, #root {
 
 .visor-controls { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%); pointer-events: auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 6px; max-width: calc(100vw - 32px); background: var(--glass); backdrop-filter: blur(24px); border: 1px solid var(--line); box-shadow: var(--ambient-shadow); padding: 8px 14px; font: 11.5px var(--sans); border-radius: 999px; }
 .visor-controls button { all: unset; cursor: pointer; padding: 7px 12px; border-radius: 999px; background: var(--surface); color: var(--dust); font: 500 11.5px var(--sans); transition: background 200ms var(--ease-fluid); }
-.visor-controls button:hover:not(:disabled) { background: var(--oxide); color: #fff; }
+.visor-controls button:hover:not(:disabled) { background: var(--oxide); color: #050507; }
 .visor-controls button:disabled { opacity: 0.35; cursor: default; }
-.visor-controls .visor-exit { background: rgba(255, 85, 32, 0.18); color: var(--oxide); font-weight: 600; }
+.visor-controls .visor-exit { background: rgba(56, 189, 248, 0.16); color: var(--oxide); font-weight: 600; }
 .visor-scrub { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 200px; font: 500 10px var(--mono); color: var(--muted); }
 .visor-scrub input { width: 100%; accent-color: var(--oxide); cursor: pointer; }
 

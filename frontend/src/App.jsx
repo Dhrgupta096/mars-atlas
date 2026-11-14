@@ -185,7 +185,7 @@ const EVA_SPECS = {
   buddy16: { key: 'buddy16', short: 'Buddy Rovers', title: '4-Crew · 2 Buddy Rovers', o2: 16.0, wb: 16.0, buddy: true },
 }
 const MODE_LABEL = { walk: 'EVA · Walk OK', rover: 'EVA · Rover Needed', expedition: 'Over Limit · Multi-Sol', none: 'Blocked (>20°)' }
-const MODE_COLOR = { walk: '#5fd38d', rover: '#f2c14e', expedition: '#e2572b', none: '#e5484d' }
+const MODE_COLOR = { walk: '#5fd38d', rover: '#f2c14e', expedition: '#a78bfa', none: '#e5484d' }
 const ROUTE_COLOR = { direct: '#e8e0d6', safe: '#5fd38d', science: '#f2c14e' }
 const EYE_OFFSET = new Cesium.Cartesian3(0, 0, -3000) // 3 km toward camera: prevents local surface clipping while Mars (R=3396 km) hides far-side points
 const surfPos = (lon, lat) => Cesium.Cartesian3.fromDegrees(lon, lat, 0)
@@ -206,7 +206,7 @@ const BASE_MODULES = [
   { code: 'KRUSTY', name: 'Kilopower Fission + Solar Array', kw: 40, h2o: 0, o2: 0, color: '#f2c14e', role: '40 kWe Continuous Nuclear + Deploying Solar Wings' },
   { code: 'ISRU-1', name: 'Subsurface Ice Drill & Sabatier', kw: -15, h2o: 24, o2: 16, color: '#56b4e9', role: 'Rodriguez Well Ice Extractor + CH4/O2 Liquefier' },
   { code: 'COMM-1', name: '15m VHF/UHF Relay Mast', kw: -2, h2o: 0, o2: 0, color: '#7fd1c7', role: '18 km Surface VHF Mesh + MRO/TGO Ka/UHF Transceiver' },
-  { code: 'LAB-1', name: 'Astrobiology & Core Drill Lab', kw: -5, h2o: 4, o2: 2, color: '#e2572b', role: '2m Regolith Core Assay + Biosignature Spectrometer' },
+  { code: 'LAB-1', name: 'Astrobiology & Core Drill Lab', kw: -5, h2o: 4, o2: 2, color: '#a78bfa', role: '2m Regolith Core Assay + Biosignature Spectrometer' },
 ]
 
 const JEZERO_BASE_PRESET = [
@@ -471,7 +471,7 @@ function setPinChain(ref, pts) {
     const tag = idx === 0 ? 'A · START' : idx === pts.length - 1 ? `${String.fromCharCode(65 + idx)} · DEST` : PIN_NAMES[idx]
     pin.position = surfPos(pt.lon, pt.lat)
     pin.label.text = `${tag}\n${fmtDeg(pt.lat, 'N', 'S')} ${fmtDeg(pt.lon, 'E', 'W')}`
-    pin.point.color = Cesium.Color.fromCssColorString('#e2572b')
+    pin.point.color = Cesium.Color.fromCssColorString('#38bdf8')
     pin.show = true
     getJson(`/api/terrain?lat=${pt.lat.toFixed(4)}&lon=${pt.lon.toFixed(4)}`)
       .then(t => {
@@ -1196,7 +1196,7 @@ export default function App() {
     }
     if (showHazards && hazards) {
       for (const hz of hazards) {
-        const hCol = Cesium.Color.fromCssColorString(hz.slope_deg >= 20 ? '#e5484d' : hz.slope_deg >= 10 ? '#f2c14e' : '#e2572b')
+        const hCol = Cesium.Color.fromCssColorString(hz.slope_deg >= 20 ? '#e5484d' : hz.slope_deg >= 10 ? '#f2c14e' : '#38bdf8')
         const hDegLat = (hz.radius_km * 1000) * degPerM
         const hDegLon = hDegLat / Math.max(Math.cos(hz.lat * Math.PI / 180), 0.05)
         const hRing = Array.from({ length: 37 }, (_, i) => {
