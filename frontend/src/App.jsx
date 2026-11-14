@@ -2316,6 +2316,11 @@ export default function App() {
                 {GRS_ELEMENTS.map(el => (
                   <button
                     key={el.key}
+                    role="tab"
+                    aria-pressed={grsElem === el.key}
+                    onClick={() => { playTick(sfxRef.current, 1320, 0.014); setGrsElem(el.key) }}
+                    title={`${el.name}: ${el.desc}`}
+                  >
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
               <div className="prevhead">
