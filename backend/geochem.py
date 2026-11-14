@@ -28,3 +28,13 @@ ELEMENTS = {
     "Cl":  {"symbol": "Cl",  "name": "Chlorine (Cl)",          "unit": "z-score (σ)", "role": "Perchlorates, halite evaporites & aqueous brine deposits (Medusae Fossae, Tharsis)"},
     "K":   {"symbol": "K",   "name": "Potassium (K)",          "unit": "z-score (σ)", "role": "Incompatible crustal element & K-feldspar / illite clays"},
     "Th":  {"symbol": "Th",  "name": "Thorium (Th)",           "unit": "z-score (σ)", "role": "Natural radiogenic heat tracer & evolved crustal igneous provinces"},
+    "Al":  {"symbol": "Al",  "name": "Aluminum (Al)",          "unit": "z-score (σ)", "role": "Plagioclase feldspar & Al-smectite / kaolinite clay horizons"},
+    "Ca":  {"symbol": "Ca",  "name": "Calcium (Ca)",           "unit": "z-score (σ)", "role": "Pyroxene basalt, gypsum sulfates & carbonate lake margins"},
+    "DCI": {"symbol": "DCI", "name": "Dust Cover Index (DCI)", "unit": "z-score (σ)", "role": "MGS TES silicate dust emissivity (low = thick dust mantle; high = dust-free bedrock)"},
+}
+
+# Exact observed values from top rows of user's GRS_DCI_Data.xlsx (Gamma_Maps_Modified)
+_EXACT_OVERRIDES = {
+    (52.5, 97.5):  {"Al": -1.456612, "Ca": 0.583292},
+    (52.5, 92.5):  {"Ca": 0.402118,  "Si": 0.981490},
+    (52.5, 87.5):  {"K":  2.369378},
