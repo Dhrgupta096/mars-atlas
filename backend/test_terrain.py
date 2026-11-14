@@ -22,8 +22,9 @@ assert len(hmap) == 33 * 33 * 4
 rows, grids = load_grs_dataset()
 assert len(rows) == 1451 and len(HEADERS) == 29 and set(grids.keys()) >= {"Fe", "H2O", "Si", "S", "Cl", "K", "Th", "Al", "Ca", "DCI"}
 gc = geochem_at(18.44, 77.45)
+assert "Fe" in gc["elements"] and "H2O" in gc["elements"] and "DCI" in gc["elements"]
 multi = chain_legs(safest_path, [(18.44, 77.45), (18.50, 77.40), (18.55, 77.36)])
 assert multi is not None and multi["distance_m"] > 5000 and len(multi["path"]) > 20 and "ai_slope" in multi
 ai_steep = ai_slope_analysis(-3.15, -71.85)
 assert ai_steep["hazard_type"] == "Steep Escarpment" and ai_steep["traction_pct"] < 60
-print("all terrain checks passed")
+print("all terrain & GRS geochemistry checks passed")
