@@ -815,6 +815,11 @@ html, body, #root {
   text-align: center;
   border-radius: 9px;
   font: 600 11.5px/1 var(--mono);
+  color: var(--muted);
+  transition: background 200ms var(--ease-fluid), color 200ms var(--ease-fluid);
+}
+.grs-pills button:hover {
+  color: var(--dust);
 .layers {
   position: static;
   display: flex;
