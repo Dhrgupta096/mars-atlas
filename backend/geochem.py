@@ -297,3 +297,13 @@ def load_grs_dataset() -> tuple[list[dict], dict[str, np.ndarray]]:
         lon_norm = ((lon + 180.0) % 360.0) - 180.0
         ri = int(np.clip(round((87.5 - lat) / 5.0), 0, 35))
         ci = int(np.clip(round((lon_norm + 177.5) / 5.0), 0, 71))
+        for k in elem_keys:
+            col_name = "DCI_recal" if k == "DCI" else k
+            v = r.get(col_name)
+            if isinstance(v, (int, float)) and not np.isnan(v):
+                grid_5deg[k][ri, ci] = float(v)
+
+    # Fill any unmeasured mid-lat cells and polar caps (>52.5°N / <-52.5°S) smoothly so globe has zero polar holes
+    for ri in range(36):
+        lat = 87.5 - ri * 5.0
+        for ci in range(72):
