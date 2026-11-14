@@ -18,3 +18,13 @@ HEADERS = [
     "Northern Lowlands", "Southern Highlands", "Non-Volcanic", "Volcanic",
     "Cl Depleted", "Cl Enriched", "DCI Depleted", "DCI Enriched",
     "H2O Depleted", "H2O Enriched", "S Depleted", "S Enriched", "DCI-Extrema",
+]
+
+ELEMENTS = {
+    "Fe":  {"symbol": "Fe",  "name": "Iron (Fe)",              "unit": "z-score (σ)", "role": "Basaltic crust, hematite & ferric oxides (high in Northern Lowlands / Acidalia)"},
+    "H2O": {"symbol": "H2O", "name": "Water / Hydrogen (H₂O)", "unit": "z-score (σ)", "role": "Hydrated sulfates, phyllosilicates & subsurface ground ice (Arabia, Utopia, Poles)"},
+    "Si":  {"symbol": "Si",  "name": "Silicon (Si)",           "unit": "z-score (σ)", "role": "Silicate crust, silica sinter & andesitic volcanics"},
+    "S":   {"symbol": "S",   "name": "Sulfur (S)",             "unit": "z-score (σ)", "role": "Evaporite sulfate beds & volcanic outgassing (Meridiani, Valles Marineris, Tharsis)"},
+    "Cl":  {"symbol": "Cl",  "name": "Chlorine (Cl)",          "unit": "z-score (σ)", "role": "Perchlorates, halite evaporites & aqueous brine deposits (Medusae Fossae, Tharsis)"},
+    "K":   {"symbol": "K",   "name": "Potassium (K)",          "unit": "z-score (σ)", "role": "Incompatible crustal element & K-feldspar / illite clays"},
+    "Th":  {"symbol": "Th",  "name": "Thorium (Th)",           "unit": "z-score (σ)", "role": "Natural radiogenic heat tracer & evolved crustal igneous provinces"},
