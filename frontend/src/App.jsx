@@ -25,7 +25,12 @@ const LAYERS = {
   'THEMIS 100m': { wms: 'MOLA_THEMIS_blend', maxLevel: 12, detail: 'THEMIS' },
   'Night-IR': { id: 'THEMIS_NightIR_ControlledMosaics_100m_v2_oct2018', ext: 'png', maxLevel: 7, detail: 'Thermal Inertia' },
   Elevation: { id: 'Mars_MGS_MOLA_ClrShade_merge_global_463m', maxLevel: 5, detail: 'HRSC_MOLA_Blend_Hillshade' },
+  Elements: { grs: true, maxLevel: 8, detail: 'Odyssey GRS + TES DCI' },
 }
+const GRS_ELEMENTS = [
+  { key: 'Fe', label: 'Fe', name: 'Iron (Fe)', desc: 'Basaltic crust, hematite & ferric oxides' },
+  { key: 'H2O', label: 'H₂O', name: 'Water / Hydrogen (H₂O)', desc: 'Subsurface ice, hydrated sulfates & clays' },
+  { key: 'Si', label: 'Si', name: 'Silicon (Si)', desc: 'Silicate crust, silica sinter & andesites' },
 const RISK_COLOR = { safe: '#5fd38d', caution: '#f2c14e', 'too steep': '#e5484d' }
 const getJson = url => fetch(url).then(r => (r.ok ? r.json() : Promise.reject(r.status)))
 
