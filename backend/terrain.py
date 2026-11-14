@@ -115,6 +115,17 @@ _RUST_RGB = np.array([
     [248, 206, 168],  # summit dust
 ], dtype=np.float32)
 
+_NIGHT_IR_H = np.array([-7500.0, -4500.0, -2000.0, 0.0, 2500.0, 7000.0, 16000.0])
+_NIGHT_IR_RGB = np.array([
+    [132, 132, 134],  # deep basin compacted floor
+    [142, 142, 144],  # northern polar & lowland plains (matches THEMIS Night-IR 60° boundary)
+    [148, 148, 150],  # mid-latitude plains
+    [154, 154, 156],  # datum highlands
+    [146, 146, 148],  # dust-mantled plateau (cooler at night)
+    [138, 138, 140],  # high-altitude volcanic dust
+    [130, 130, 132],  # summit cold thermal signature
+], dtype=np.float32)
+
 
 def _encode_png(rgb: np.ndarray) -> bytes:
     h, w, _ = rgb.shape
@@ -226,9 +237,17 @@ def render_mola_tile(mode: str, z: int, y: int, x: int, size: int = 256) -> byte
         lon_g = lons[None, 1:-1] * 180.0
         grain = np.sin(lat_g * 2.3 + lon_g * 1.9) * np.cos(lat_g * 3.7 - lon_g * 2.9) * 0.032
         shade = shade + grain
+    if mode == "night_ir":
+        # Exposed bedrock on steep scarps & crater rims retains heat at night (brighter in Night-IR)
+        shade = shade + np.clip(slope_mag * 0.36, 0.0, 0.22)
     shade = np.clip(shade, 0.28, 1.25)[:, :, None]
 
-    knots, pal = (_ELEV_H, _ELEV_RGB) if mode == "elevation" else (_RUST_H, _RUST_RGB)
+    if mode == "elevation":
+        knots, pal = _ELEV_H, _ELEV_RGB
+    elif mode == "night_ir":
+        knots, pal = _NIGHT_IR_H, _NIGHT_IR_RGB
+    else:
+        knots, pal = _RUST_H, _RUST_RGB
     rgb = np.empty((size, size, 3), dtype=np.float32)
     for ch in range(3):
         rgb[:, :, ch] = np.interp(h, knots, pal[:, ch])

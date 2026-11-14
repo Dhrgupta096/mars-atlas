@@ -502,6 +502,15 @@ const PRESET_EVAS = [
       { lat: -4.8100, lon: 137.3600 }, // Gediz Vallis Ridge (Mt. Sharp)
     ],
   },
+  {
+    id: 'olympus',
+    label: 'Olympus Mons Caldera Rim',
+    pts: [
+      { lat: 18.3500, lon: -133.2500 }, // East Caldera Bench
+      { lat: 18.5200, lon: -133.5800 }, // Central Collapse Pit Rim
+      { lat: 18.6800, lon: -133.9200 }, // 21.2 km Summit Escarpment
+    ],
+  },
 ]
 function setMinZoom(ref, dist) {
   if (ref.current) ref.current.scene.screenSpaceCameraController.minimumZoomDistance = dist
@@ -537,68 +546,224 @@ const FAQ_ITEMS = [
   {
     q: 'Why can’t astronauts or rovers climb slopes steeper than 15°–20° on Mars?',
     cat: 'Terrain & Physics',
-    a: 'Under Martian gravity (0.38g = 3.72 m/s²), normal downforce on wheels and boots drops by 62%, while loose Aeolian dust and vesicular basalt regolith cause severe Bekker sinkage. Above 15°, wheel slip exceeds 40% and crew metabolic O₂ burn doubles; above 20°, loose talus triggers slide-outs. Mars Atlas runs a live Bekker Terramechanics & AI Slope Engine that flags hazards and snaps waypoints to safer <8° benches.',
-    actionLabel: 'Load Gale → Mt. Sharp Climb →',
+    color: '#fbbf24',
+    viz: 'slope',
+    stats: ['0.38g Gravity', '>15° Slip Risk', '<8° Safe Bench'],
+    a: 'Under Martian gravity (3.72 m/s²), wheel and boot downforce drops by 62% while loose regolith causes severe Bekker sinkage. Above 15°, wheel slip exceeds 40% and crew O₂ burn doubles. Our AI Slope Engine flags steep scarps and snaps waypoints to safer benches.',
+    actionLabel: 'Launch Gale → Mt. Sharp Climb →',
     actionKey: 'gale',
   },
   {
     q: 'How do astronauts survive if a rover breaks down far from the Habitat?',
     cat: 'Survival & EVA',
-    a: 'Every EVA is governed by the NASA Walk-Back Safety Limit (drawn as the green 6 km foot limit and amber 12 km rover walk-back rings on the globe). Crew in 8h PLSS or 10h xEMU suits must always retain enough O₂ reserve to walk back to Pin A on foot if their rover fails. For deeper expeditions, switching to Buddy Rovers (16h) pairs two rovers so crew can transfer vehicles without walking back.',
-    actionLabel: 'Load Jezero Delta EVA →',
+    color: '#34d399',
+    viz: 'walkback',
+    stats: ['6 km Foot Ring', '12 km Rover Ring', '16h Buddy Pair'],
+    a: 'Every EVA is governed by the NASA Walk-Back Safety Limit (the glowing emerald 6 km and amber 12 km rings on the globe). Crew in 8h PLSS or 10h xEMU suits always keep enough O₂ to walk back to Pin A if a rover fails, or pair 2 Buddy Rovers for deep exploration.',
+    actionLabel: 'Launch Jezero Delta EVA →',
     actionKey: 'jezero',
   },
   {
     q: 'Why does the Night-IR (Thermal Inertia) layer matter for survival?',
     cat: 'NASA Data & Layers',
-    a: 'Daytime optical cameras cannot distinguish solid bedrock from a deep dust trap covered by a thin veneer of sand. NASA Mars Odyssey’s THEMIS Night-IR (100m) measures thermal inertia at night: loose fine dust cools rapidly and appears dark (sinkage hazard), whereas exposed bedrock and cemented duricrust retain daytime heat and glow bright (high-traction safe terrain).',
+    color: '#c084fc',
+    viz: 'nightir',
+    stats: ['THEMIS 100m IR', 'Bright = Bedrock', 'Dark = Dust Trap'],
+    a: 'Daytime optical cameras cannot tell solid bedrock from a deep sand trap. NASA Mars Odyssey’s THEMIS Night-IR measures thermal inertia at night: loose fine dust cools fast and turns dark, whereas solid bedrock retains daytime heat and glows bright.',
     actionLabel: 'Switch to Night-IR Layer →',
     actionKey: 'nightir',
   },
   {
     q: 'How do astronauts find underground water ice for drinking & rocket fuel (ISRU)?',
     cat: 'Survival & EVA',
-    a: 'Liquid water boils or freezes immediately at Mars’s 6 mbar triple-point atmospheric pressure, so crews target subsurface glaciers and hydrated clay/sulfate beds mapped by MRO SHARAD radar and Odyssey Neutron Spectrometry. An ISRU Rodriguez Well melts buried ice and feeds a Sabatier reactor (CO₂ + 4H₂ → CH₄ + 2H₂O) to produce breathable O₂ and methalox return propellant.',
-    actionLabel: 'Toggle Water Ice Zones →',
+    color: '#00f0ff',
+    viz: 'water',
+    stats: ['6 mbar Triple Pt', 'SHARAD Radar', 'CO₂ + 4H₂ → CH₄'],
+    a: 'Liquid water boils or freezes immediately at Mars’s 6 mbar pressure, so crews drill into subsurface glaciers mapped by MRO SHARAD radar. A Rodriguez Well melts buried ice and feeds a Sabatier reactor to produce breathable O₂ and methalox rocket fuel.',
+    actionLabel: 'Reveal Subsurface Water Ice →',
     actionKey: 'water',
   },
   {
     q: 'What happens during a Solar Particle Event (S3 Flare) or Regional Dust Storm?',
     cat: 'Survival & EVA',
-    a: 'With no global magnetosphere and an atmosphere only 0.6% as dense as Earth’s, Galactic Cosmic Rays deliver ~21 μSv/h continuously, while an S3 Solar Flare spikes radiation 18.5× (>380 μSv/h). Mars Atlas scans surrounding MOLA topography to locate the nearest high-wall crater rim, alcove, or lava tube (65%–85% sky-view shielding) and calculates the emergency rover dash time.',
-    actionLabel: 'Simulate S3 Solar Flare →',
+    color: '#f43f5e',
+    viz: 'radiation',
+    stats: ['388 μSv/h Spike', '68%+ Rock Shield', 'τ = 3.8 Dust Storm'],
+    a: 'With no global magnetosphere, an S3 Solar Flare spikes radiation 18.5× (>380 μSv/h). Mars Atlas scans surrounding MOLA topography to pinpoint the nearest high-wall crater rim, alcove, or lava tube and computes your emergency rover dash time.',
+    actionLabel: 'Trigger S3 Solar Flare Alert →',
     actionKey: 'spe',
   },
   {
     q: 'How does the A* Pathfinding Engine compute Direct vs. Safest vs. Science routes?',
     cat: 'Terrain & Physics',
-    a: 'When you place pins on the globe, our Python backend samples the NASA MGS MOLA 32ppd (463m) Digital Elevation Model across an A* lattice. Direct follows the geodesic chord; Safest applies an exponential slope penalty above 10° to route around cliffs and crater walls; Science detours toward high-gradient geologic contacts, delta scarps, and phyllosilicate outcrops.',
+    color: '#38bdf8',
+    viz: 'astar',
+    stats: ['MOLA 463m Grid', 'Exp Slope Penalty', 'Outcrop Scoring'],
+    a: 'When you drop pins on Mars, our backend samples the NASA MGS MOLA 32ppd DEM across an A* lattice. Direct follows the geodesic chord; Safest routes around >10° cliffs; Science detours toward high-value carbonate and clay outcrops.',
+    actionLabel: 'Launch Jezero A* Comparison →',
+    actionKey: 'jezero',
   },
   {
     q: 'How do crew communications work when crater walls block radio line-of-sight?',
     cat: 'Survival & EVA',
-    a: 'Because Mars’s radius (3,396 km) is roughly half of Earth’s, the planetary horizon is much closer—a 15m Habitat VHF mast only reaches ~18 km over flat ground. Beyond the blue VHF ring or inside deep canyons, Mars Atlas tracks live Electra UHF orbital relay passes from MRO (280 km), ESA Trace Gas Orbiter (400 km), and Mars Odyssey (380 km).',
-    actionLabel: 'View 3D Orbiters →',
+    color: '#22d3ee',
+    viz: 'orbiters',
+    stats: ['18 km VHF Horizon', 'MRO 280 km', 'TGO & Odyssey UHF'],
+    a: 'Because Mars’s radius (3,396 km) is half of Earth’s, a 15m Habitat VHF mast only reaches ~18 km over flat ground. Beyond the blue VHF ring or inside canyons, Mars Atlas tracks live UHF relay passes from MRO, ESA Trace Gas Orbiter, and Mars Odyssey.',
+    actionLabel: 'Track 3D Relay Orbiters →',
     actionKey: 'orbiters',
   },
   {
     q: 'How does Martian Time (Sol, MTC, LTST, and Ls) work?',
     cat: 'Terrain & Physics',
-    a: 'One Martian solar day (Sol) lasts 24h 39m 35.244s. MTC is Coordinated Mars Time at the Airy-0 prime meridian (computed via the Allison & McEwen 2000 orbital clock), LTST is Local True Solar Time at your cursor longitude, and Ls (Solar Longitude) tracks Mars’s orbital seasons—where Ls = 180°–360° marks perihelion global dust storm season.',
-    actionLabel: 'Toggle Day/Night Terminator →',
+    color: '#f59e0b',
+    viz: 'soltime',
+    stats: ['24h 39m 35s Sol', 'Airy-0 MTC Clock', 'Ls Season Angle'],
+    a: 'One Martian solar day (Sol) is 39 minutes longer than Earth’s day. MTC is Coordinated Mars Time at the Airy-0 prime meridian, LTST is Local True Solar Time at your cursor, and Ls tracks Mars’s orbital seasons and perihelion dust storm window.',
+    actionLabel: 'Toggle Live Solar Terminator →',
     actionKey: 'sunlight',
   },
   {
     q: 'Where do all the maps, elevations, and live rover photos come from?',
     cat: 'NASA Data & Layers',
-    a: 'Mars Atlas integrates 5 authentic NASA/USGS pipelines: (1) NASA Mars Trek WMTS (Viking 232m, THEMIS Night-IR 100m, MOLA Color Hillshade), (2) USGS Astrogeology WMS (THEMIS IR/VIS 100m blend), (3) NASA MGS MOLA 32ppd DEM (local binary 3D mesh & instant tile renderer), (4) NASA Mars 2020 Perseverance & Curiosity Live Raw Camera API, and (5) Curiosity’s Mount Sharp Ascent Traverse.',
+    color: '#a78bfa',
+    viz: 'layers',
+    stats: ['NASA Mars Trek', 'USGS THEMIS WMS', 'Mars 2020 Live API'],
+    a: 'Mars Atlas fuses 5 authentic NASA/USGS feeds: Mars Trek WMTS (Viking 232m, Night-IR 100m, MOLA Color), USGS Astrogeology WMS (THEMIS 100m), local MGS MOLA 32ppd 3D binary terrain meshes, and live Perseverance & Curiosity raw camera downlinks.',
+    actionLabel: 'Switch to Elevation Hypsometry →',
+    actionKey: 'elevation',
   },
   {
     q: 'What keyboard shortcuts and instrument hotkeys are available?',
     cat: 'Controls & Hotkeys',
-    a: 'Operate Mars Atlas like a hardware field console: [1–4] Switch Base Map Layers · [L] Toggle Solar Terminator · [V] Enter/Exit Spacesuit Visor HUD · [C] Toggle Forearm Wrist Cuff · [H] Clean Full-Screen Globe · [M] Toggle Tactile Audio & Quindar · [R] Reset Globe View · [WASD] Free-Drive Rover in Visor · [?] Open/Close this Field Manual.',
+    color: '#ec4899',
+    viz: 'hotkeys',
+    stats: ['1–4 Map Layers', 'V Visor · C Cuff', 'WASD Rover Drive'],
+    a: 'Command the atlas instantaneously: [1–4] Switch Map Layers · [L] Solar Terminator · [V] Spacesuit Visor HUD · [C] Forearm Wrist Cuff · [H] Clean Globe · [M] Tactile Audio · [R] Reset Camera · [WASD] Free-Drive Rover · [?] Field Manual.',
   },
 ]
+
+function FaqMotionVisual({ kind, color }) {
+  return (
+    <div className="faq-viz" style={{ '--accent': color }}>
+      <svg viewBox="0 0 320 74" className="faq-viz-svg" aria-hidden="true">
+        <defs>
+          <linearGradient id={`grad-${kind}`} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.32" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        {kind === 'slope' && (
+          <g>
+            <path d="M0,66 Q80,62 140,42 T260,14 L320,10 L320,74 L0,74 Z" fill={`url(#grad-${kind})`} />
+            <path d="M0,66 Q80,62 140,42 T260,14 L320,10" fill="none" stroke={color} strokeWidth="2.2" className="svg-flow-dash" />
+            <line x1="0" y1="28" x2="320" y2="28" stroke="#f43f5e" strokeWidth="1" strokeDasharray="4 4" opacity="0.7" />
+            <text x="10" y="22" fill="#f43f5e" fontSize="9" fontFamily="var(--mono)">▲ 15° CRITICAL SLIP THRESHOLD</text>
+            <g className="rover-climb-anim">
+              <circle cx="155" cy="36" r="6" fill={color} />
+              <circle cx="155" cy="36" r="13" fill="none" stroke={color} strokeWidth="1.2" opacity="0.5" className="pulse-ring-svg" />
+            </g>
+          </g>
+        )}
+        {kind === 'walkback' && (
+          <g transform="translate(160, 37)">
+            <circle r="30" fill="none" stroke="#fbbf24" strokeWidth="1.2" strokeDasharray="4 3" opacity="0.65" />
+            <circle r="19" fill="none" stroke={color} strokeWidth="1.6" strokeDasharray="5 3" className="pulse-ring-svg" />
+            <circle r="4" fill="#fff" />
+            <g className="radar-sweep-anim">
+              <line x1="0" y1="0" x2="29" y2="0" stroke={color} strokeWidth="2" />
+              <path d="M0,0 L29,0 A29,29 0 0,0 20,-20 Z" fill={color} fillOpacity="0.22" />
+            </g>
+            <text x="-148" y="-16" fill={color} fontSize="9" fontFamily="var(--mono)">● 6 KM FOOT SAFE</text>
+            <text x="54" y="24" fill="#fbbf24" fontSize="9" fontFamily="var(--mono)">◐ 12 KM ROVER</text>
+          </g>
+        )}
+        {kind === 'nightir' && (
+          <g>
+            <rect x="12" y="14" width="136" height="46" rx="8" fill="rgba(192,132,252,0.12)" stroke={color} strokeWidth="1.2" />
+            <rect x="172" y="14" width="136" height="46" rx="8" fill="rgba(56,189,248,0.06)" stroke="#38bdf8" strokeWidth="1" strokeDasharray="3 3" />
+            <path d="M24,48 Q56,22 88,46 T136,28" fill="none" stroke={color} strokeWidth="2.4" className="svg-flow-dash" />
+            <path d="M184,50 Q216,46 248,51 T296,48" fill="none" stroke="#38bdf8" strokeWidth="1.6" opacity="0.7" />
+            <text x="24" y="28" fill="#fff" fontSize="9" fontFamily="var(--mono)">BEDROCK · 215 K (SAFE)</text>
+            <text x="184" y="28" fill="#38bdf8" fontSize="9" fontFamily="var(--mono)">DUST TRAP · 155 K</text>
+          </g>
+        )}
+        {kind === 'water' && (
+          <g>
+            <rect x="0" y="42" width="320" height="32" fill="rgba(0,240,255,0.16)" />
+            <path d="M0,42 Q80,36 160,42 T320,40" fill="none" stroke={color} strokeWidth="2.2" className="svg-flow-dash" />
+            <g className="radar-wave-down">
+              <path d="M140,8 Q160,22 180,8" fill="none" stroke={color} strokeWidth="1.6" />
+              <path d="M130,18 Q160,36 190,18" fill="none" stroke={color} strokeWidth="1.6" opacity="0.7" />
+            </g>
+            <text x="12" y="22" fill={color} fontSize="9" fontFamily="var(--mono)">SHARAD 20 MHz RADAR</text>
+            <text x="12" y="58" fill="#fff" fontSize="9.5" fontFamily="var(--mono)">BURIED GLACIER ICE (-15m) → O₂ + CH₄</text>
+          </g>
+        )}
+        {kind === 'radiation' && (
+          <g>
+            <path d="M210,74 L235,18 L320,18 L320,74 Z" fill="rgba(255,255,255,0.09)" stroke="#94a3b8" strokeWidth="1.5" />
+            <path d="M10,12 L195,46 M30,6 L205,34 M0,28 L185,58" stroke={color} strokeWidth="2" strokeDasharray="6 6" className="svg-flow-dash" />
+            <circle cx="255" cy="50" r="14" fill="rgba(52,211,153,0.18)" stroke="#34d399" strokeWidth="1.6" className="pulse-ring-svg" />
+            <text x="12" y="64" fill={color} fontSize="9" fontFamily="var(--mono)">⚡ S3 PROTON FLUX</text>
+            <text x="230" y="34" fill="#34d399" fontSize="9" fontFamily="var(--mono)">78% SHIELD</text>
+          </g>
+        )}
+        {kind === 'astar' && (
+          <g>
+            <line x1="24" y1="54" x2="296" y2="20" stroke="#94a3b8" strokeWidth="1.4" strokeDasharray="4 4" />
+            <path d="M24,54 C110,68 175,8 296,20" fill="none" stroke="#34d399" strokeWidth="2.5" className="svg-flow-dash" />
+            <path d="M24,54 C95,12 210,64 296,20" fill="none" stroke="#fbbf24" strokeWidth="2" strokeDasharray="5 3" className="svg-flow-dash" />
+            <circle cx="24" cy="54" r="4.5" fill="#fff" />
+            <circle cx="296" cy="20" r="4.5" fill={color} />
+            <text x="36" y="22" fill="#34d399" fontSize="9" fontFamily="var(--mono)">● SAFEST (&lt;8°)</text>
+            <text x="195" y="64" fill="#fbbf24" fontSize="9" fontFamily="var(--mono)">◆ SCIENCE OUTCROPS</text>
+          </g>
+        )}
+        {kind === 'orbiters' && (
+          <g transform="translate(160, 38)">
+            <ellipse rx="125" ry="24" fill="none" stroke={color} strokeWidth="1.5" strokeDasharray="6 4" className="svg-flow-dash" />
+            <circle r="16" fill="rgba(255,85,32,0.28)" stroke="#ff5520" strokeWidth="1.5" />
+            <g className="orbiter-glide-anim">
+              <circle cx="-85" cy="-16" r="5" fill={color} />
+              <path d="M-85,-16 L-12,-4 L-4,6 Z" fill={color} fillOpacity="0.22" />
+            </g>
+            <text x="-148" y="-18" fill={color} fontSize="9" fontFamily="var(--mono)">MRO · TGO · ODYSSEY UHF RELAY</text>
+          </g>
+        )}
+        {kind === 'soltime' && (
+          <g>
+            <path d="M0,56 Q80,8 160,38 T320,20" fill="none" stroke={color} strokeWidth="2.2" className="svg-flow-dash" />
+            <circle cx="92" cy="24" r="8" fill={color} className="pulse-ring-svg" />
+            <line x1="160" y1="0" x2="160" y2="74" stroke="#38bdf8" strokeWidth="1.2" strokeDasharray="3 3" />
+            <text x="14" y="66" fill={color} fontSize="9" fontFamily="var(--mono)">☀ DAYLIGHT · GO</text>
+            <text x="170" y="66" fill="#38bdf8" fontSize="9" fontFamily="var(--mono)">☾ TERMINATOR · 24h 39m SOL</text>
+          </g>
+        )}
+        {kind === 'layers' && (
+          <g>
+            <rect x="20" y="16" width="76" height="42" rx="6" fill="rgba(255,85,32,0.2)" stroke="#ff5520" strokeWidth="1.4" />
+            <rect x="118" y="16" width="76" height="42" rx="6" fill="rgba(167,139,250,0.2)" stroke={color} strokeWidth="1.4" className="pulse-ring-svg" />
+            <rect x="216" y="16" width="84" height="42" rx="6" fill="rgba(52,211,153,0.2)" stroke="#34d399" strokeWidth="1.4" />
+            <text x="32" y="40" fill="#fff" fontSize="9" fontFamily="var(--mono)">VIKING</text>
+            <text x="130" y="40" fill="#fff" fontSize="9" fontFamily="var(--mono)">NIGHT-IR</text>
+            <text x="228" y="40" fill="#fff" fontSize="9" fontFamily="var(--mono)">MOLA 3D</text>
+          </g>
+        )}
+        {kind === 'hotkeys' && (
+          <g>
+            {[['1-4', 18, '#38bdf8'], ['V', 88, '#f43f5e'], ['C', 146, '#34d399'], ['L', 204, '#fbbf24'], ['?', 262, color]].map(([k, x, c]) => (
+              <g key={k} transform={`translate(${x}, 18)`}>
+                <rect width="42" height="36" rx="8" fill="rgba(255,255,255,0.06)" stroke={c} strokeWidth="1.5" className="pulse-ring-svg" />
+                <text x="21" y="22" textAnchor="middle" fill="#fff" fontSize="11" fontWeight="700" fontFamily="var(--mono)">{k}</text>
+              </g>
+            ))}
+          </g>
+        )}
+      </svg>
+    </div>
+  )
+}
 
 function syncSunlight(ref, enabled, mars, center) {
   const v = ref.current
@@ -1070,6 +1235,12 @@ export default function App() {
       localRust.contrast = 1.12
       localRust.brightness = 1.02
 
+      // Full-globe (-90°..+90°) monochrome thermal-inertia relief base so Night-IR polar caps (>60°N and <-60°S) have zero orange hole
+      const localNightIr = layers.addImageryProvider(localTileLayer('themis', 8))
+      localNightIr.saturation = 0.0
+      localNightIr.brightness = 0.94
+      localNightIr.contrast = 1.26
+
       const viking = layers.addImageryProvider(trekLayer(LAYERS.Imagery))
       viking.contrast = 1.16
       viking.brightness = 1.03
@@ -1093,21 +1264,25 @@ export default function App() {
       themisHiRes.alpha = 0.42
       themisHiRes.contrast = 1.32
 
-      v._marsLayers = { localRust, viking, localElev, nightIr, themisBlend, themisHiRes }
+      v._marsLayers = { localRust, localNightIr, viking, localElev, nightIr, themisBlend, themisHiRes }
     }
-    const { localRust, viking, localElev, nightIr, themisBlend, themisHiRes } = v._marsLayers
-    localRust.show = true
+    const { localRust, localNightIr, viking, localElev, nightIr, themisBlend, themisHiRes } = v._marsLayers
+    v.scene.globe.baseColor = Cesium.Color.fromCssColorString(layer === 'Night-IR' ? '#88888e' : '#6c311b')
+    localRust.show = layer !== 'Night-IR' || layerOpacity < 0.99
+    localNightIr.show = layer === 'Night-IR'
     viking.show = layer === 'Imagery'
     localElev.show = layer === 'Elevation'
     nightIr.show = layer === 'Night-IR'
     themisBlend.show = layer === 'THEMIS 100m'
     themisHiRes.show = layer !== 'Elevation' && layer !== 'Night-IR'
-  }, [layer])
+    setRenderMode(viewerRef, false, visor)
+  }, [layer, layerOpacity, visor])
 
   useEffect(() => {
     const v = viewerRef.current
     if (!v || !v._marsLayers) return
-    const { localElev, nightIr, themisBlend } = v._marsLayers
+    const { localNightIr, localElev, nightIr, themisBlend } = v._marsLayers
+    if (localNightIr) localNightIr.alpha = layerOpacity
     if (nightIr) nightIr.alpha = layerOpacity
     if (localElev) localElev.alpha = layerOpacity
     if (themisBlend) themisBlend.alpha = 0.86 * layerOpacity
@@ -1301,9 +1476,11 @@ export default function App() {
   const runFaqAction = key => {
     playTick(sfxRef.current, 1480, 0.016)
     setFaqOpen(false)
+    setIntro(false)
     if (key === 'gale') loadPreset(PRESET_EVAS[1])
     else if (key === 'jezero') loadPreset(PRESET_EVAS[0])
     else if (key === 'nightir') setLayer('Night-IR')
+    else if (key === 'elevation') setLayer('Elevation')
     else if (key === 'water') {
       setShowWater(true)
       glide(viewerRef.current.camera, Cesium.Cartesian3.fromDegrees(77.45, 18.45, 4200000))
@@ -1856,34 +2033,43 @@ export default function App() {
             </div>
 
             <div className="landing-bento">
-              <div className="bento-shell">
+              <div className="bento-shell" style={{ '--bento-color': '#34d399' }}>
                 <button className="bento-card" onClick={() => { playTick(sfxRef.current, 1480, 0.016); loadPreset(PRESET_EVAS[0]) }}>
                   <div className="bento-top">
-                    <span className="bento-tag">Perseverance Sector</span>
+                    <span className="bento-tag">● Perseverance Sector</span>
                     <span className="bento-icon">↗</span>
                   </div>
                   <strong>Jezero Crater Delta</strong>
                   <p>4-waypoint carbonate margin traverse with live Mastcam-Z imagery</p>
+                  <svg viewBox="0 0 180 22" className="bento-wave" aria-hidden="true">
+                    <path d="M0,18 Q36,4 72,14 T144,6 L180,10" fill="none" stroke="#34d399" strokeWidth="2" className="svg-flow-dash" />
+                  </svg>
                 </button>
               </div>
-              <div className="bento-shell">
+              <div className="bento-shell" style={{ '--bento-color': '#fbbf24' }}>
                 <button className="bento-card" onClick={() => { playTick(sfxRef.current, 1440, 0.016); loadPreset(PRESET_EVAS[1]) }}>
                   <div className="bento-top">
-                    <span className="bento-tag">Curiosity Sector</span>
+                    <span className="bento-tag">● Curiosity Sector</span>
                     <span className="bento-icon">↗</span>
                   </div>
                   <strong>Mount Sharp Ascent</strong>
                   <p>Bradbury Landing to Gediz Vallis sulfate ridge climb</p>
+                  <svg viewBox="0 0 180 22" className="bento-wave" aria-hidden="true">
+                    <path d="M0,20 Q45,16 90,10 T180,3" fill="none" stroke="#fbbf24" strokeWidth="2" className="svg-flow-dash" />
+                  </svg>
                 </button>
               </div>
-              <div className="bento-shell">
+              <div className="bento-shell" style={{ '--bento-color': '#c084fc' }}>
                 <button className="bento-card" onClick={() => { playTick(sfxRef.current, 1400, 0.016); loadPreset(PRESET_EVAS[2]) }}>
                   <div className="bento-top">
-                    <span className="bento-tag">21.2 km Shield Volcano</span>
+                    <span className="bento-tag">● 21.2 km Shield Volcano</span>
                     <span className="bento-icon">↗</span>
                   </div>
                   <strong>Olympus Mons Summit</strong>
                   <p>Caldera rim expedition across the tallest peak in the solar system</p>
+                  <svg viewBox="0 0 180 22" className="bento-wave" aria-hidden="true">
+                    <path d="M0,19 L48,5 L92,12 L134,4 L180,18" fill="none" stroke="#c084fc" strokeWidth="2" className="svg-flow-dash" />
+                  </svg>
                 </button>
               </div>
             </div>
@@ -1897,8 +2083,10 @@ export default function App() {
             <div className="faq-modal">
               <div className="faq-head">
                 <div>
-                  <div className="intro-kicker">INTERPLANETARY SURVIVAL GUIDE · FIELD MANUAL</div>
-                  <h2>Martian Survival FAQ &amp; Mission Reference</h2>
+                  <div className="intro-kicker">
+                    <span className="kicker-pulse" /> INTERPLANETARY SURVIVAL GUIDE · INTERACTIVE TELEMETRY MANUAL
+                  </div>
+                  <h2>Martian Survival Physics &amp; Mission Systems</h2>
                 </div>
                 <button className="closebtn" onClick={() => setFaqOpen(false)} aria-label="Close Field Manual">✕</button>
               </div>
@@ -1918,7 +2106,7 @@ export default function App() {
                 <input
                   type="search"
                   className="faq-search"
-                  placeholder="Search questions (water, slope, Night-IR, O2…)"
+                  placeholder="Search telemetry, water, slope, Night-IR, O2…"
                   value={faqQuery}
                   onChange={e => setFaqQuery(e.target.value)}
                   aria-label="Filter FAQ questions"
@@ -1926,18 +2114,28 @@ export default function App() {
               </div>
               <div className="faq-grid">
                 {filteredFaqs.map((item, idx) => (
-                  <article key={idx} className="faq-card">
-                    <div className="faq-card-top">
-                      <span className="faq-badge">{item.cat}</span>
-                      <span className="faq-idx">0{idx + 1}</span>
+                  <article key={idx} className="faq-card" style={{ '--card-accent': item.color }}>
+                    <FaqMotionVisual kind={item.viz} color={item.color} />
+                    <div className="faq-card-body">
+                      <div className="faq-card-top">
+                        <span className="faq-badge">{item.cat}</span>
+                        <span className="faq-idx">SYS · 0{idx + 1}</span>
+                      </div>
+                      <h3>{item.q}</h3>
+                      {item.stats && (
+                        <div className="faq-stats">
+                          {item.stats.map(st => (
+                            <span key={st} className="faq-stat-chip">{st}</span>
+                          ))}
+                        </div>
+                      )}
+                      <p>{item.a}</p>
+                      {item.actionKey && (
+                        <button className="faq-act" onClick={() => runFaqAction(item.actionKey)}>
+                          <span>{item.actionLabel}</span>
+                        </button>
+                      )}
                     </div>
-                    <h3>{item.q}</h3>
-                    <p>{item.a}</p>
-                    {item.actionKey && (
-                      <button className="faq-act" onClick={() => runFaqAction(item.actionKey)}>
-                        {item.actionLabel}
-                      </button>
-                    )}
                   </article>
                 ))}
               </div>
