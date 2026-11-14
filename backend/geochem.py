@@ -397,3 +397,13 @@ def geochem_at(lat: float, lon: float) -> dict:
     )
     elements_out = {
         k: round(float(grids[k][ri, ci]), 2)
+        for k in ("Fe", "H2O", "Si", "S", "Cl", "K", "Th", "Al", "Ca", "DCI")
+    }
+    anomalies = []
+    for k in ("Fe", "H2O", "Si", "S", "Cl", "K", "Th", "Al", "Ca"):
+        v = elements_out[k]
+        if v >= 1.0:
+            anomalies.append(f"{k} Enriched (+{v:.1f}σ)")
+        elif v <= -1.0:
+            anomalies.append(f"{k} Depleted ({v:.1f}σ)")
+
