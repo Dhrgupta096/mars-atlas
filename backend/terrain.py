@@ -251,6 +251,9 @@ def render_mola_tile(mode: str, z: int, y: int, x: int, size: int = 256) -> byte
         if mode == "elevation":
             knots, pal = _ELEV_H, _ELEV_RGB
         elif mode == "night_ir":
+            knots, pal = _NIGHT_IR_H, _NIGHT_IR_RGB
+        else:
+            knots, pal = _RUST_H, _RUST_RGB
 
     out = np.clip(rgb * shade, 0, 255).astype(np.uint8)
     return _encode_png(out)
