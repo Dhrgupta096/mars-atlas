@@ -117,13 +117,13 @@ _RUST_RGB = np.array([
 
 _NIGHT_IR_H = np.array([-7500.0, -4500.0, -2000.0, 0.0, 2500.0, 7000.0, 16000.0])
 _NIGHT_IR_RGB = np.array([
-    [132, 132, 134],  # deep basin compacted floor
-    [142, 142, 144],  # northern polar & lowland plains (matches THEMIS Night-IR 60° boundary)
-    [148, 148, 150],  # mid-latitude plains
-    [154, 154, 156],  # datum highlands
-    [146, 146, 148],  # dust-mantled plateau (cooler at night)
-    [138, 138, 140],  # high-altitude volcanic dust
-    [130, 130, 132],  # summit cold thermal signature
+    [146, 146, 150],  # deep basin compacted floor
+    [162, 162, 166],  # northern polar & lowland plains
+    [172, 172, 176],  # mid-latitude plains
+    [180, 180, 184],  # datum highlands
+    [168, 168, 172],  # dust-mantled plateau (cooler at night)
+    [156, 156, 160],  # high-altitude volcanic dust
+    [148, 148, 152],  # summit cold thermal signature
 ], dtype=np.float32)
 
 
@@ -212,14 +212,16 @@ def render_mola_tile(mode: str, z: int, y: int, x: int, size: int = 256) -> byte
     dzdy = (grid[:-2, 1:-1] - grid[2:, 1:-1]) / (2.0 * step_m)
     lap = (grid[:-2, 1:-1] + grid[2:, 1:-1] + grid[1:-1, :-2] + grid[1:-1, 2:] - 4.0 * h) / step_m
 
-    exag = 8.5 if mode == "themis" else 5.5
+    lat_abs = np.abs(lats[1:-1, None])
+    polar_boost = 1.0 + 1.85 * np.clip((lat_abs - 52.0) / 38.0, 0.0, 1.0) ** 1.6
+    exag = (11.5 if mode == "night_ir" else 8.5 if mode == "themis" else 5.5) * polar_boost
     nx, ny, nz = -dzdx * exag, -dzdy * exag, np.ones_like(h)
     norm = np.sqrt(nx * nx + ny * ny + nz * nz)
     # Multi-azimuth relief: primary NW sun (315°) + secondary NE fill (45°) + steep slope darkening + ridge/canyon curvature
     shade_nw = (-0.62 * nx + 0.62 * ny + 0.48 * nz) / norm
     shade_ne = (0.45 * nx + 0.45 * ny + 0.77 * nz) / norm
-    slope_mag = np.hypot(dzdx, dzdy)
-    curv = np.clip(-lap * 0.055, -0.14, 0.14)
+    slope_mag = np.hypot(dzdx, dzdy) * polar_boost
+    curv = np.clip(-lap * 0.065 * polar_boost, -0.18, 0.18)
     shade = 0.34 + 0.72 * shade_nw + 0.20 * shade_ne - np.clip(slope_mag * 0.24, 0.0, 0.16) + curv
     if mode != "elevation":
         # Natural Martian albedo variation (Syrtis Major / Acidalia dark basalt vs Arabia / Tharsis bright dust)
@@ -231,16 +233,16 @@ def render_mola_tile(mode: str, z: int, y: int, x: int, size: int = 256) -> byte
             + 0.04 * np.sin(lat_r * 5.0 + lon_r * 4.0)
         )
         shade = shade * (1.0 + albedo)
-    if z >= 4:
-        # Procedural high-frequency Martian regolith micro-relief at close zoom
+    if z >= 2 or mode == "night_ir":
+        # Procedural high-frequency Martian regolith & polar trough micro-relief
         lat_g = lats[1:-1, None] * 180.0
         lon_g = lons[None, 1:-1] * 180.0
-        grain = np.sin(lat_g * 2.3 + lon_g * 1.9) * np.cos(lat_g * 3.7 - lon_g * 2.9) * 0.032
+        grain = np.sin(lat_g * 2.3 + lon_g * 1.9) * np.cos(lat_g * 3.7 - lon_g * 2.9) * 0.036
         shade = shade + grain
     if mode == "night_ir":
-        # Exposed bedrock on steep scarps & crater rims retains heat at night (brighter in Night-IR)
-        shade = shade + np.clip(slope_mag * 0.36, 0.0, 0.22)
-    shade = np.clip(shade, 0.28, 1.25)[:, :, None]
+        # Exposed bedrock on steep scarps, crater rims & polar spiral troughs retains heat at night (brighter in Night-IR)
+        shade = shade + np.clip(slope_mag * 0.42, 0.0, 0.26) - 0.04
+    shade = np.clip(shade, 0.26, 1.32)[:, :, None]
 
     if mode == "elevation":
         knots, pal = _ELEV_H, _ELEV_RGB
