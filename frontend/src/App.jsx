@@ -2321,6 +2321,11 @@ export default function App() {
                     onClick={() => { playTick(sfxRef.current, 1320, 0.014); setGrsElem(el.key) }}
                     title={`${el.name}: ${el.desc}`}
                   >
+                    {el.label}
+                  </button>
+                ))}
+              </div>
+              <div className="grs-scale" title="Normalized GRS concentration z-score (σ)">
           {preview && (
             <aside className="ui panel preview" aria-live="polite">
               <div className="prevhead">
