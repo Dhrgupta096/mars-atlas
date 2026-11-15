@@ -1385,12 +1385,12 @@ html, body, #root {
    ========================================================================= */
 .ui-compass {
   position: fixed;
-  top: 72px;
+  bottom: 20px;
   right: 20px;
   z-index: 12;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: flex-end;
   gap: 6px;
   transition: right 360ms var(--ease-fluid);
   pointer-events: auto;
@@ -1533,6 +1533,74 @@ html, body, #root {
   border-color: rgba(56, 189, 248, 0.4);
   background: rgba(56, 189, 248, 0.1);
 }
+.compass-xyz-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--shell-border);
+  border-radius: 999px;
+  box-shadow: var(--inner-glow), 0 8px 20px -4px rgba(0, 0, 0, 0.55);
+}
+.xyz-svg {
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  overflow: visible;
+}
+.xyz-bg {
+  fill: rgba(0, 0, 0, 0.45);
+  stroke: rgba(255, 255, 255, 0.12);
+  stroke-width: 1;
+}
+.xyz-line {
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+.xyz-x { stroke: #f87171; }
+.xyz-y { stroke: #34d399; }
+.xyz-z { stroke: #38bdf8; }
+.xyz-origin { fill: #f4f6fa; }
+.xyz-lbl {
+  font-family: var(--mono);
+  font-size: 6.5px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+.xyz-lbl-x { fill: #f87171; }
+.xyz-lbl-y { fill: #34d399; }
+.xyz-lbl-z { fill: #38bdf8; }
+.xyz-pills {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.xyz-chip {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  font-family: var(--mono);
+  font-size: 9.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+.xyz-chip-x { color: #f87171; }
+.xyz-chip-x:hover { background: rgba(248, 113, 113, 0.18); border-color: rgba(248, 113, 113, 0.5); }
+.xyz-chip-y { color: #34d399; }
+.xyz-chip-y:hover { background: rgba(52, 211, 153, 0.18); border-color: rgba(52, 211, 153, 0.5); }
+.xyz-chip-z { color: #38bdf8; }
+.xyz-chip-z:hover { background: rgba(56, 189, 248, 0.18); border-color: rgba(56, 189, 248, 0.5); }
 
 /* =========================================================================
    DEEP SPACE NETWORK · INTERPLANETARY BANDWIDTH TELEMETRY
@@ -1713,7 +1781,7 @@ html, body, #root {
   .ui-compass--shifted { right: 340px; }
 }
 @media (max-width: 860px) {
-  .ui-compass { top: 64px; right: 12px; }
+  .ui-compass { bottom: 76px; right: 12px; }
   .ui-compass--shifted { right: 12px; }
   .comms-grid { grid-template-columns: 1fr; }
 }

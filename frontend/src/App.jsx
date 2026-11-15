@@ -763,6 +763,7 @@ export default function App() {
   const compassDegRef = useRef(null)
   const compassCardRef = useRef(null)
   const compassTiltRef = useRef(null)
+  const xyzSvgRef = useRef(null)
   const visorOpenRef = useRef(false)
   const audioRef = useRef(false)
   const [layer, setLayer] = useState('Imagery')
@@ -895,6 +896,32 @@ export default function App() {
       if (compassDegRef.current) compassDegRef.current.textContent = `${String(hdg).padStart(3, '0')}°`
       if (compassCardRef.current) compassCardRef.current.textContent = CARDINAL[Math.round(hdg / 45) % 8]
       if (compassTiltRef.current) compassTiltRef.current.textContent = pch <= -70 ? '2D Top' : `3D ${Math.abs(pch)}°`
+      if (xyzSvgRef.current) {
+        const hr = (hdg * Math.PI) / 180
+        const pr = (pch * Math.PI) / 180
+        const ch = Math.cos(hr), sh = Math.sin(hr)
+        const cp = Math.cos(pr), sp = Math.sin(pr)
+        const cx = 22, cy = 22, r = 14
+        const axes = [
+          ['x', ch, sp * sh],
+          ['y', -sh, sp * ch],
+          ['z', 0, -cp],
+        ]
+        for (const [k, ax, ay] of axes) {
+          const line = xyzSvgRef.current.querySelector(`[data-axis="${k}"]`)
+          const lbl = xyzSvgRef.current.querySelector(`[data-lbl="${k}"]`)
+          const px = cx + ax * r
+          const py = cy + ay * r
+          if (line) {
+            line.setAttribute('x2', px.toFixed(1))
+            line.setAttribute('y2', py.toFixed(1))
+          }
+          if (lbl) {
+            lbl.setAttribute('x', (cx + ax * (r + 5)).toFixed(1))
+            lbl.setAttribute('y', (cy + ay * (r + 5)).toFixed(1))
+          }
+        }
+      }
     }
     const onMove = () => {
       const hdg = Math.round((Cesium.Math.toDegrees(camera.heading) + 360) % 360)
@@ -2503,14 +2530,43 @@ export default function App() {
               ↻
             </button>
           </div>
-          <button
-            ref={compassTiltRef}
-            className="compass-tilt"
-            onClick={toggleTilt}
-            title="Toggle Top-Down 2D Nadir vs 3D Oblique Tilt"
-          >
-            {compassPitch <= -70 ? '2D Top' : `3D ${Math.abs(compassPitch)}°`}
-          </button>
+          <div className="compass-xyz-bar">
+            <svg ref={xyzSvgRef} viewBox="0 0 44 44" className="xyz-svg" aria-label="3D XYZ Axis Orientation">
+              <circle cx="22" cy="22" r="19" className="xyz-bg" />
+              <line data-axis="x" x1="22" y1="22" x2="36" y2="22" className="xyz-line xyz-x" />
+              <line data-axis="y" x1="22" y1="22" x2="22" y2="8" className="xyz-line xyz-y" />
+              <line data-axis="z" x1="22" y1="22" x2="22" y2="22" className="xyz-line xyz-z" />
+              <circle cx="22" cy="22" r="2" className="xyz-origin" />
+              <text data-lbl="x" x="41" y="22" className="xyz-lbl xyz-lbl-x">X</text>
+              <text data-lbl="y" x="22" y="3" className="xyz-lbl xyz-lbl-y">Y</text>
+              <text data-lbl="z" x="22" y="22" className="xyz-lbl xyz-lbl-z">Z</text>
+            </svg>
+            <div className="xyz-pills">
+              <button
+                className="xyz-chip xyz-chip-x"
+                onClick={() => { playTick(sfxRef.current, 1460, 0.014); orbitTo(Cesium.Math.toRadians(90), Cesium.Math.toRadians(-35)) }}
+                title="Align +X East (Heading 090°, 3D Oblique)"
+              >X</button>
+              <button
+                className="xyz-chip xyz-chip-y"
+                onClick={() => { playTick(sfxRef.current, 1500, 0.014); orbitTo(0, Cesium.Math.toRadians(-35)) }}
+                title="Align +Y True North (Heading 000°, 3D Oblique)"
+              >Y</button>
+              <button
+                className="xyz-chip xyz-chip-z"
+                onClick={() => { playTick(sfxRef.current, 1420, 0.014); orbitTo(0, Cesium.Math.toRadians(-89.5)) }}
+                title="Align +Z Zenith Top-Down (2D Nadir)"
+              >Z</button>
+            </div>
+            <button
+              ref={compassTiltRef}
+              className="compass-tilt"
+              onClick={toggleTilt}
+              title="Toggle Top-Down 2D Nadir vs 3D Oblique Tilt"
+            >
+              {compassPitch <= -70 ? '2D Top' : `3D ${Math.abs(compassPitch)}°`}
+            </button>
+          </div>
         </aside>
       )}
 
