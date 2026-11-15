@@ -1398,6 +1398,33 @@ html, body, #root {
 .ui-compass--shifted {
   right: 396px;
 }
+.compass-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.compass-rot {
+  width: 26px;
+  height: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: var(--glass);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--shell-border);
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: all 160ms ease;
+}
+.compass-rot:hover {
+  color: var(--dust);
+  border-color: rgba(56, 189, 248, 0.4);
+  background: rgba(56, 189, 248, 0.12);
+}
 .compass-btn {
   display: flex;
   align-items: center;

@@ -1467,20 +1467,45 @@ export default function App() {
     }
   }
 
+  const orbitTo = (newHeading, newPitch) => {
+    const v = viewerRef.current
+    if (!v) return
+    const { camera, scene } = v
+    const safePitch = Math.min(Cesium.Math.toRadians(-12), Math.max(Cesium.Math.toRadians(-89.5), newPitch))
+    const target = camera.pickEllipsoid(
+      new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2),
+      MARS,
+    )
+    if (target) {
+      const range = Cesium.Cartesian3.distance(camera.position, target)
+      camera.flyToBoundingSphere(new Cesium.BoundingSphere(target, 0), {
+        offset: new Cesium.HeadingPitchRange(newHeading, safePitch, range),
+        duration: 0.65,
+        easingFunction: Cesium.EasingFunction.QUADRATIC_OUT,
+      })
+    } else {
+      camera.flyTo({
+        destination: camera.position.clone(),
+        orientation: { heading: newHeading, pitch: safePitch, roll: 0 },
+        duration: 0.65,
+        easingFunction: Cesium.EasingFunction.QUADRATIC_OUT,
+      })
+    }
+    scene.requestRender()
+  }
+
   const resetNorth = () => {
     playTick(sfxRef.current, 1500, 0.016)
     const cam = viewerRef.current?.camera
     if (!cam) return
-    cam.flyTo({
-      destination: cam.position,
-      orientation: {
-        heading: 0,
-        pitch: cam.pitch,
-        roll: 0,
-      },
-      duration: 0.8,
-      easingFunction: Cesium.EasingFunction.QUADRATIC_OUT,
-    })
+    orbitTo(0, cam.pitch)
+  }
+
+  const rotateHeading = deltaDeg => {
+    playTick(sfxRef.current, 1460, 0.014)
+    const cam = viewerRef.current?.camera
+    if (!cam) return
+    orbitTo(cam.heading + Cesium.Math.toRadians(deltaDeg), cam.pitch)
   }
 
   const toggleTilt = () => {
@@ -1488,16 +1513,7 @@ export default function App() {
     const cam = viewerRef.current?.camera
     if (!cam) return
     const isSteep = cam.pitch < Cesium.Math.toRadians(-70)
-    cam.flyTo({
-      destination: cam.position,
-      orientation: {
-        heading: cam.heading,
-        pitch: isSteep ? Cesium.Math.toRadians(-45) : Cesium.Math.toRadians(-90),
-        roll: 0,
-      },
-      duration: 0.8,
-      easingFunction: Cesium.EasingFunction.QUADRATIC_OUT,
-    })
+    orbitTo(cam.heading, isSteep ? Cesium.Math.toRadians(-45) : Cesium.Math.toRadians(-89.5))
   }
 
   const { distAu, distKm, owltSec, owltStr } = useMemo(() => {
@@ -2445,30 +2461,48 @@ export default function App() {
           role="region"
           aria-label="Martian 3D Compass & Heading"
         >
-          <button
-            className="compass-btn"
-            onClick={resetNorth}
-            title={`Bearing: ${String(compassHdg).padStart(3, '0')}° ${CARDINAL[Math.round(compassHdg / 45) % 8]} · Click to Align True North [N]`}
-            aria-label="Reset orientation to True North"
-          >
-            <div ref={compassRoseRef} className="compass-rose" style={{ transform: `rotate(${-compassHdg}deg)` }}>
-              <svg viewBox="0 0 52 52" className="compass-svg" aria-hidden="true">
-                <circle cx="26" cy="26" r="23" className="compass-dial-ring" />
-                <line x1="26" y1="3" x2="26" y2="7" className="tick-n" />
-                <line x1="49" y1="26" x2="45" y2="26" className="tick" />
-                <line x1="26" y1="49" x2="26" y2="45" className="tick" />
-                <line x1="3" y1="26" x2="7" y2="26" className="tick" />
-                <polygon points="26,6 30.5,26 26,23 21.5,26" className="needle-n" />
-                <polygon points="26,46 30.5,26 26,29 21.5,26" className="needle-s" />
-                <circle cx="26" cy="26" r="3" className="needle-pivot" />
-                <text x="26" y="15" className="compass-n-text">N</text>
-              </svg>
-            </div>
-            <div className="compass-readout">
-              <span ref={compassDegRef} className="compass-deg">{String(compassHdg).padStart(3, '0')}°</span>
-              <span ref={compassCardRef} className="compass-card">{CARDINAL[Math.round(compassHdg / 45) % 8]}</span>
-            </div>
-          </button>
+          <div className="compass-row">
+            <button
+              className="compass-rot"
+              onClick={() => rotateHeading(-30)}
+              title="Rotate heading 30° counter-clockwise (or hold Ctrl + Drag)"
+              aria-label="Rotate counter-clockwise 30 degrees"
+            >
+              ↺
+            </button>
+            <button
+              className="compass-btn"
+              onClick={resetNorth}
+              title={`Bearing: ${String(compassHdg).padStart(3, '0')}° ${CARDINAL[Math.round(compassHdg / 45) % 8]} · Click to Align True North [N]`}
+              aria-label="Reset orientation to True North"
+            >
+              <div ref={compassRoseRef} className="compass-rose" style={{ transform: `rotate(${-compassHdg}deg)` }}>
+                <svg viewBox="0 0 52 52" className="compass-svg" aria-hidden="true">
+                  <circle cx="26" cy="26" r="23" className="compass-dial-ring" />
+                  <line x1="26" y1="3" x2="26" y2="7" className="tick-n" />
+                  <line x1="49" y1="26" x2="45" y2="26" className="tick" />
+                  <line x1="26" y1="49" x2="26" y2="45" className="tick" />
+                  <line x1="3" y1="26" x2="7" y2="26" className="tick" />
+                  <polygon points="26,6 30.5,26 26,23 21.5,26" className="needle-n" />
+                  <polygon points="26,46 30.5,26 26,29 21.5,26" className="needle-s" />
+                  <circle cx="26" cy="26" r="3" className="needle-pivot" />
+                  <text x="26" y="15" className="compass-n-text">N</text>
+                </svg>
+              </div>
+              <div className="compass-readout">
+                <span ref={compassDegRef} className="compass-deg">{String(compassHdg).padStart(3, '0')}°</span>
+                <span ref={compassCardRef} className="compass-card">{CARDINAL[Math.round(compassHdg / 45) % 8]}</span>
+              </div>
+            </button>
+            <button
+              className="compass-rot"
+              onClick={() => rotateHeading(30)}
+              title="Rotate heading 30° clockwise (or hold Ctrl + Drag)"
+              aria-label="Rotate clockwise 30 degrees"
+            >
+              ↻
+            </button>
+          </div>
           <button
             ref={compassTiltRef}
             className="compass-tilt"
