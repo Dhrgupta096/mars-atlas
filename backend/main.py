@@ -1,11 +1,15 @@
 """Run: uvicorn main:app --reload --port 8000"""
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+import re
 import ssl
 import time as _time
 from urllib.request import Request, urlopen
-from fastapi import FastAPI, Query, Response
+from fastapi import FastAPI, HTTPException, Query, Request as FastAPIRequest, Response
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from mars_time import mars_time
 from terrain import elevation, slope, risk, render_mola_tile, render_mola_heightmap, ai_slope_analysis
@@ -16,6 +20,57 @@ from water import water_sites, water_at
 
 app = FastAPI(title="Mars Map API")
 _CACHE_DIR = Path(__file__).resolve().parent.parent / "data" / "tile_cache"
+_LAYER_RE = re.compile(r"^[A-Za-z0-9_.-]{1,80}$")
+
+# Strict CORS: allow local dev, GitHub Pages, and Vercel deployments
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://dhrgupta096.github.io",
+    ],
+    allow_origin_regex=r"^https://[a-zA-Z0-9-]+\.vercel\.app$",
+    allow_methods=["GET"],
+    allow_headers=["*"],
+)
+
+# Sliding-window rate limiter & security headers (pure stdlib, no external deps)
+# ponytail: in-memory per-IP buckets; replace with Redis/Cloudflare WAF for multi-worker prod
+_RATE_BUCKETS: dict[tuple[str, str], deque[float]] = defaultdict(deque)
+
+
+@app.middleware("http")
+async def security_firewall_middleware(request: FastAPIRequest, call_next):
+    path = request.url.path
+    if path.startswith("/api/"):
+        ip = (request.headers.get("x-forwarded-for") or "").split(",")[0].strip() or (
+            request.client.host if request.client else "unknown"
+        )
+        if path.startswith("/api/route"):
+            bucket_key, limit = (ip, "route"), 30
+        elif path.startswith(("/api/tiles/", "/api/heightmap/", "/api/trek/")):
+            bucket_key, limit = (ip, "tiles"), 600
+        else:
+            bucket_key, limit = (ip, "api"), 180
+
+        now = _time.monotonic()
+        q = _RATE_BUCKETS[bucket_key]
+        while q and now - q[0] > 60.0:
+            q.popleft()
+        if len(q) >= limit:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Rate limit exceeded. Slow down requests."},
+                headers={"Retry-After": "60"},
+            )
+        q.append(now)
+
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    return response
 
 # (name, lat, lon east-positive, kind)
 # ponytail: hand-picked list; replace with full USGS Gazetteer (~2k features) via a data script on day 5
@@ -70,7 +125,19 @@ def route(lat1: float = Query(0.0, ge=-90, le=90), lon1: float = Query(0.0, ge=-
           lat2: float = Query(0.0, ge=-90, le=90), lon2: float = Query(0.0, ge=-180, le=360),
           pts: str | None = Query(None)):
     if pts:
-        waypoints = [(float(p.split(",")[0]), float(p.split(",")[1])) for p in pts.split(";") if "," in p][:6]
+        try:
+            waypoints = []
+            for p in pts.split(";")[:6]:
+                if "," not in p:
+                    continue
+                la, lo = (float(v) for v in p.split(",", 1))
+                if not (-90.0 <= la <= 90.0 and -180.0 <= lo <= 360.0):
+                    raise ValueError("Out of bounds")
+                waypoints.append((la, lo))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid waypoints in 'pts'")
+        if len(waypoints) < 2:
+            raise HTTPException(status_code=400, detail="At least 2 valid waypoints required")
     else:
         waypoints = [(lat1, lon1), (lat2, lon2)]
     direct = chain_legs(straight_line, waypoints)
@@ -157,8 +224,15 @@ def heightmap(z: int, y: int, x: int):
 
 @app.get("/api/trek/{layer}/{z}/{y}/{x}.jpg")
 def trek_tile(layer: str, z: int, y: int, x: int):
+    if not _LAYER_RE.fullmatch(layer) or ".." in layer:
+        raise HTTPException(status_code=400, detail="Invalid layer name")
     z = max(0, min(z, 7))
-    cache_file = _CACHE_DIR / layer / str(z) / str(y) / f"{x}.jpg"
+    y = max(0, min(y, 1 << z))
+    x = max(0, min(x, 2 << z))
+    cache_root = _CACHE_DIR.resolve()
+    cache_file = (cache_root / layer / str(z) / str(y) / f"{x}.jpg").resolve()
+    if not cache_file.is_relative_to(cache_root):
+        raise HTTPException(status_code=400, detail="Invalid tile path")
     if cache_file.is_file():
         return Response(
             content=cache_file.read_bytes(),

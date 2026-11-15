@@ -757,6 +757,11 @@ function setRenderMode(ref, continuous, depthTest = false) {
 export default function App() {
   const globeRef = useRef(null)
   const viewerRef = useRef(null)
+  const compassRoseRef = useRef(null)
+  const compassDegRef = useRef(null)
+  const compassCardRef = useRef(null)
+  const compassTiltRef = useRef(null)
+  const visorOpenRef = useRef(false)
   const audioRef = useRef(false)
   const [layer, setLayer] = useState('Imagery')
   const [places, setPlaces] = useState([])
@@ -846,6 +851,9 @@ export default function App() {
     scene.globe.preloadAncestors = false
     scene.globe.preloadSiblings = false
     scene.globe.maximumScreenSpaceError = 3.2
+    scene.globe.dynamicScreenSpaceError = true
+    scene.globe.dynamicScreenSpaceErrorDensity = 0.00278
+    scene.globe.dynamicScreenSpaceErrorFactor = 4.0
     scene.globe.baseColor = Cesium.Color.fromCssColorString('#6c311b')
     scene.screenSpaceCameraController.minimumZoomDistance = 600
     viewerRef.current = viewer
@@ -880,7 +888,19 @@ export default function App() {
       glide(camera, HOME)
     }
 
+    const updateCompassDom = (hdg, pch) => {
+      if (compassRoseRef.current) compassRoseRef.current.style.transform = `rotate(${-hdg}deg)`
+      if (compassDegRef.current) compassDegRef.current.textContent = `${String(hdg).padStart(3, '0')}°`
+      if (compassCardRef.current) compassCardRef.current.textContent = CARDINAL[Math.round(hdg / 45) % 8]
+      if (compassTiltRef.current) compassTiltRef.current.textContent = pch <= -70 ? '2D Top' : `3D ${Math.abs(pch)}°`
+    }
     const onMove = () => {
+      const hdg = Math.round((Cesium.Math.toDegrees(camera.heading) + 360) % 360)
+      const pch = Math.round(Cesium.Math.toDegrees(camera.pitch))
+      updateCompassDom(hdg, pch)
+      if (visorOpenRef.current) setVisorHeading(hdg)
+    }
+    const onMoveEnd = () => {
       const c = camera.pickEllipsoid(new Cesium.Cartesian2(scene.canvas.clientWidth / 2, scene.canvas.clientHeight / 2), MARS)
       const g = c ? MARS.cartesianToCartographic(c) : MARS.cartesianToCartographic(camera.position)
       if (g) {
@@ -890,13 +910,14 @@ export default function App() {
       }
       const hdg = Math.round((Cesium.Math.toDegrees(camera.heading) + 360) % 360)
       const pch = Math.round(Cesium.Math.toDegrees(camera.pitch))
-      setVisorHeading(hdg)
+      updateCompassDom(hdg, pch)
       setCompassHdg(hdg)
       setCompassPitch(pch)
+      if (visorOpenRef.current) setVisorHeading(hdg)
     }
-    camera.percentageChanged = 0.005
+    camera.percentageChanged = 0.025
     camera.changed.addEventListener(onMove)
-    camera.moveEnd.addEventListener(onMove)
+    camera.moveEnd.addEventListener(onMoveEnd)
 
     // Click 1 → start pin A, click 2 → destination pin B, click 3 → start over (or drop Base Module in 'base' mode)
     const makePin = (letter, below = false) => Object.assign(viewer.entities.add({
@@ -1206,6 +1227,7 @@ export default function App() {
       lyr.alpha = layerOpacity
     })
     themisHiRes.show = layer !== 'Elevation' && layer !== 'Night-IR' && layer !== 'Elements'
+    visorOpenRef.current = visor
     setRenderMode(viewerRef, false, visor)
   }, [layer, grsElem, layerOpacity, visor])
 
@@ -2423,7 +2445,7 @@ export default function App() {
             title={`Bearing: ${String(compassHdg).padStart(3, '0')}° ${CARDINAL[Math.round(compassHdg / 45) % 8]} · Click to Align True North [N]`}
             aria-label="Reset orientation to True North"
           >
-            <div className="compass-rose" style={{ transform: `rotate(${-compassHdg}deg)` }}>
+            <div ref={compassRoseRef} className="compass-rose" style={{ transform: `rotate(${-compassHdg}deg)` }}>
               <svg viewBox="0 0 52 52" className="compass-svg" aria-hidden="true">
                 <circle cx="26" cy="26" r="23" className="compass-dial-ring" />
                 <line x1="26" y1="3" x2="26" y2="7" className="tick-n" />
@@ -2437,11 +2459,12 @@ export default function App() {
               </svg>
             </div>
             <div className="compass-readout">
-              <span className="compass-deg">{String(compassHdg).padStart(3, '0')}°</span>
-              <span className="compass-card">{CARDINAL[Math.round(compassHdg / 45) % 8]}</span>
+              <span ref={compassDegRef} className="compass-deg">{String(compassHdg).padStart(3, '0')}°</span>
+              <span ref={compassCardRef} className="compass-card">{CARDINAL[Math.round(compassHdg / 45) % 8]}</span>
             </div>
           </button>
           <button
+            ref={compassTiltRef}
             className="compass-tilt"
             onClick={toggleTilt}
             title="Toggle Top-Down 2D Nadir vs 3D Oblique Tilt"
