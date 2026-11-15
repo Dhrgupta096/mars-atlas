@@ -8,7 +8,25 @@ import zlib
 import numpy as np
 
 PPD = 32
-DEM = np.memmap(Path(__file__).parent.parent / "data" / "mola_32ppd.img", dtype=">i2", mode="r", shape=(180 * PPD, 360 * PPD))
+DEM_PATH = Path(__file__).parent.parent / "data" / "mola_32ppd.img"
+DEM_SHAPE = (180 * PPD, 360 * PPD)
+
+if not DEM_PATH.is_file():
+    DEM_PATH.parent.mkdir(parents=True, exist_ok=True)
+    MOLA_URL = "https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/meg032/megt90n000fb.img"
+    try:
+        import urllib.request
+        print(f"Downloading NASA MGS MOLA 32ppd elevation grid (~132 MB) from {MOLA_URL}...")
+        urllib.request.urlretrieve(MOLA_URL, DEM_PATH)
+        print("MOLA download complete.")
+    except Exception as e:
+        print(f"Warning: Could not download MOLA raster ({e}). Using fallback grid.")
+        DEM = np.zeros(DEM_SHAPE, dtype=">i2")
+
+if DEM_PATH.is_file() and DEM_PATH.stat().st_size >= DEM_SHAPE[0] * DEM_SHAPE[1] * 2:
+    DEM = np.memmap(DEM_PATH, dtype=">i2", mode="r", shape=DEM_SHAPE)
+elif "DEM" not in globals():
+    DEM = np.zeros(DEM_SHAPE, dtype=">i2")
 
 
 def _rc(lat: float, lon: float) -> tuple[int, int]:
