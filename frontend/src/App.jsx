@@ -648,8 +648,24 @@ const FAQ_ITEMS = [
   {
     q: 'What keyboard shortcuts and instrument hotkeys are available?',
     cat: 'Controls & Hotkeys',
-    stats: ['1–5 Map Layers', 'V Visor · C Cuff', 'WASD Rover Drive'],
-    a: 'Use single-key shortcuts anywhere on the map: [1–5] Switch Map Layers · [L] Solar Terminator · [V] Spacesuit Visor HUD · [C] Forearm Wrist Cuff · [H] Clean Globe · [M] Tactile Audio · [R] Reset Camera · [WASD] Free-Drive Rover · [?] Field Manual.',
+    stats: ['1–5 Map Layers', 'N North · B Comms', 'V Visor · C Cuff'],
+    a: 'Use single-key shortcuts anywhere on the map: [1–5] Switch Map Layers · [N] Reset True North · [B] Bandwidth & Comms Console · [L] Solar Terminator · [V] Spacesuit Visor HUD · [C] Forearm Wrist Cuff · [H] Clean Globe · [M] Tactile Audio · [R] Reset Camera · [WASD] Free-Drive Rover · [?] Field Manual.',
+  },
+  {
+    q: 'How does Interplanetary Bandwidth & Deep Space Communications work?',
+    cat: 'Survival & EVA',
+    stats: ['2.05 Mbps Ka-Band', '3.1m–22.3m OWLT', 'Electra UHF Relay'],
+    a: 'Earth and Mars are separated by 55M to 400M km, causing speed-of-light delays from 3.1 to 22.3 minutes. The NASA Deep Space Network (DSN) provides 2.05 Mbps high-rate downlink over Ka-Band (32 GHz), with 32 kbps command uplinks and 2.0 Mbps UHF proximity relay via orbiters (MRO/TGO). Mars Atlas computes live One-Way Light Time (OWLT) and link margins in real time.',
+    actionLabel: 'Open DSN Bandwidth Console [B]',
+    actionKey: 'comms',
+  },
+  {
+    q: 'How do you orient and navigate on a planet without a global magnetic field?',
+    cat: 'Terrain & Physics',
+    stats: ['No Magnetic Dynamo', 'Areocentric True North', 'Press N to Align'],
+    a: 'Unlike Earth, Mars lost its core dynamo ~4 billion years ago, so standard magnetic compasses spin uselessly in local remanent crustal fields. Martian explorers use celestial star trackers, Sun sensors, and inertial navigation referenced to Areocentric True North (the rotational spin axis). Mars Atlas provides a live True North compass with instant 1-click alignment.',
+    actionLabel: 'Align to True North [N]',
+    actionKey: 'compass',
   },
 ]
 
@@ -765,6 +781,9 @@ export default function App() {
   const [cuff, setCuff] = useState(false)
   const [visorIdx, setVisorIdx] = useState(0)
   const [visorHeading, setVisorHeading] = useState(65)
+  const [compassHdg, setCompassHdg] = useState(0)
+  const [compassPitch, setCompassPitch] = useState(-90)
+  const [commsOpen, setCommsOpen] = useState(false)
   const [visorAnchor, setVisorAnchor] = useState({ lat: 0, lon: -60 })
   const [roversOpen, setRoversOpen] = useState(false)
   const [dateOpen, setDateOpen] = useState(false)
@@ -869,8 +888,14 @@ export default function App() {
         const nLon = Cesium.Math.toDegrees(g.longitude)
         setCenter(prev => (Math.abs(prev.lat - nLat) > 2 || Math.abs(prev.lon - nLon) > 2 ? { lat: nLat, lon: nLon } : prev))
       }
-      setVisorHeading(Math.round((Cesium.Math.toDegrees(camera.heading) + 360) % 360))
+      const hdg = Math.round((Cesium.Math.toDegrees(camera.heading) + 360) % 360)
+      const pch = Math.round(Cesium.Math.toDegrees(camera.pitch))
+      setVisorHeading(hdg)
+      setCompassHdg(hdg)
+      setCompassPitch(pch)
     }
+    camera.percentageChanged = 0.005
+    camera.changed.addEventListener(onMove)
     camera.moveEnd.addEventListener(onMove)
 
     // Click 1 → start pin A, click 2 → destination pin B, click 3 → start over (or drop Base Module in 'base' mode)
@@ -1407,8 +1432,61 @@ export default function App() {
     } else if (key === 'sunlight') {
       setSunlight(true)
       glide(viewerRef.current.camera, HOME)
+    } else if (key === 'comms') {
+      setCommsOpen(true)
+    } else if (key === 'compass') {
+      resetNorth()
     }
   }
+
+  const resetNorth = () => {
+    playTick(sfxRef.current, 1500, 0.016)
+    const cam = viewerRef.current?.camera
+    if (!cam) return
+    cam.flyTo({
+      destination: cam.position,
+      orientation: {
+        heading: 0,
+        pitch: cam.pitch,
+        roll: 0,
+      },
+      duration: 0.8,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_OUT,
+    })
+  }
+
+  const toggleTilt = () => {
+    playTick(sfxRef.current, 1420, 0.015)
+    const cam = viewerRef.current?.camera
+    if (!cam) return
+    const isSteep = cam.pitch < Cesium.Math.toRadians(-70)
+    cam.flyTo({
+      destination: cam.position,
+      orientation: {
+        heading: cam.heading,
+        pitch: isSteep ? Cesium.Math.toRadians(-45) : Cesium.Math.toRadians(-90),
+        roll: 0,
+      },
+      duration: 0.8,
+      easingFunction: Cesium.EasingFunction.QUADRATIC_OUT,
+    })
+  }
+
+  const { distAu, distKm, owltSec, owltStr } = useMemo(() => {
+    const lsDeg = mars?.ls ?? 22.2
+    const rad = ((lsDeg - 68) * Math.PI) / 180
+    const au = Number((1.52 + 0.62 * Math.sin(rad)).toFixed(3))
+    const km = Math.round(au * 149597870.7)
+    const sec = Math.round(km / 299792.458)
+    const min = Math.floor(sec / 60)
+    const rem = sec % 60
+    return {
+      distAu: au,
+      distKm: km,
+      owltSec: sec,
+      owltStr: `${min}m ${String(rem).padStart(2, '0')}s`,
+    }
+  }, [mars?.ls])
   const copyLink = () => {
     if (route.length < 2) return
     const ptsStr = route.map(p => `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`).join(';')
@@ -1689,6 +1767,8 @@ export default function App() {
       } else if (e.key === 'Escape') {
         if (faqOpen) {
           setFaqOpen(false)
+        } else if (commsOpen) {
+          setCommsOpen(false)
         } else if (visor) {
           setVisor(false)
           setFreeDrive(null)
@@ -1702,6 +1782,11 @@ export default function App() {
       } else if (e.key === 'l' || e.key === 'L') {
         playTick(sfxRef.current, 1420, 0.014)
         setSunlight(s => !s)
+      } else if (!visor && (e.key === 'n' || e.key === 'N')) {
+        resetNorth()
+      } else if (!visor && (e.key === 'b' || e.key === 'B')) {
+        playTick(sfxRef.current, 1420, 0.014)
+        setCommsOpen(o => !o)
       } else if (e.key === 'm' || e.key === 'M') {
         const next = !sfxRef.current
         sfxRef.current = next
@@ -1750,7 +1835,7 @@ export default function App() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [visor, vLat, vLon, pathLen, faqOpen, preview, center])
+  }, [visor, vLat, vLon, pathLen, faqOpen, commsOpen, preview, center])
 
   const exitVisor = () => {
     setVisor(false)
@@ -2105,6 +2190,19 @@ export default function App() {
             <span className="tele-item">Ls <b>{mars ? `${mars.ls.toFixed(1)}°` : '--'}</b></span>
             <span className="island-sep" />
             <span className="tele-item">{simMs !== null ? 'Sim' : 'UTC'} <b><EarthClock simMs={simMs} /></b></span>
+            <span className="island-sep" />
+            <button
+              className="cleanbtn comms-pill-btn"
+              onClick={() => { playTick(sfxRef.current, 1420, 0.014); setCommsOpen(o => !o) }}
+              title="Deep Space Network (DSN) Bandwidth & Interplanetary Comms (Shortcut: B)"
+              aria-expanded={commsOpen}
+            >
+              <span className={`signal-dot signal-${envMode}`} />
+              <span className="comms-pill-text">
+                DSN <b>{envMode === 'spe' ? '8 kbps' : envMode === 'dust' ? '128 kbps' : '2.05 Mbps'}</b>
+              </span>
+              <span className="bw-owlt">· {owltStr}</span>
+            </button>
           </div>
         </header>
       )}
@@ -2311,6 +2409,46 @@ export default function App() {
           {plannerMode === 'base' && baseNodes.length > 0 && <button className="clearbtn" onClick={clearBase}>× Clear Base</button>}
           {plannerMode === 'eva' && route.length > 0 && <button className="clearbtn" onClick={clearRoute}>× Clear</button>}
         </p>
+      )}
+
+      {!intro && !visor && !cleanUi && (
+        <aside
+          className={`ui-compass${(preview || cuff || routeData || baseNodes.length > 0 || layer === 'Elements') ? ' ui-compass--shifted' : ''}`}
+          role="region"
+          aria-label="Martian 3D Compass & Heading"
+        >
+          <button
+            className="compass-btn"
+            onClick={resetNorth}
+            title={`Bearing: ${String(compassHdg).padStart(3, '0')}° ${CARDINAL[Math.round(compassHdg / 45) % 8]} · Click to Align True North [N]`}
+            aria-label="Reset orientation to True North"
+          >
+            <div className="compass-rose" style={{ transform: `rotate(${-compassHdg}deg)` }}>
+              <svg viewBox="0 0 52 52" className="compass-svg" aria-hidden="true">
+                <circle cx="26" cy="26" r="23" className="compass-dial-ring" />
+                <line x1="26" y1="3" x2="26" y2="7" className="tick-n" />
+                <line x1="49" y1="26" x2="45" y2="26" className="tick" />
+                <line x1="26" y1="49" x2="26" y2="45" className="tick" />
+                <line x1="3" y1="26" x2="7" y2="26" className="tick" />
+                <polygon points="26,6 30.5,26 26,23 21.5,26" className="needle-n" />
+                <polygon points="26,46 30.5,26 26,29 21.5,26" className="needle-s" />
+                <circle cx="26" cy="26" r="3" className="needle-pivot" />
+                <text x="26" y="15" className="compass-n-text">N</text>
+              </svg>
+            </div>
+            <div className="compass-readout">
+              <span className="compass-deg">{String(compassHdg).padStart(3, '0')}°</span>
+              <span className="compass-card">{CARDINAL[Math.round(compassHdg / 45) % 8]}</span>
+            </div>
+          </button>
+          <button
+            className="compass-tilt"
+            onClick={toggleTilt}
+            title="Toggle Top-Down 2D Nadir vs 3D Oblique Tilt"
+          >
+            {compassPitch <= -70 ? '2D Top' : `3D ${Math.abs(compassPitch)}°`}
+          </button>
+        </aside>
       )}
 
       {!intro && !visor && !cleanUi && (preview || cuff || routeData || baseNodes.length > 0 || layer === 'Elements') && (
@@ -2898,6 +3036,113 @@ export default function App() {
               Visor HUD
             </button>
           </nav>
+        </div>
+      )}
+
+      {commsOpen && (
+        <div className="faq-backdrop" role="dialog" aria-modal="true" aria-label="Interplanetary Communications and Bandwidth Monitor" onClick={e => { if (e.target === e.currentTarget) setCommsOpen(false) }}>
+          <div className="faq-shell comms-shell">
+            <div className="faq-modal comms-modal">
+              <div className="faq-head">
+                <div>
+                  <div className="intro-kicker">NASA DEEP SPACE NETWORK · DTE &amp; RELAY TELEMETRY</div>
+                  <h2>Interplanetary Comms &amp; Bandwidth</h2>
+                  <p className="faq-sub">Real-time Direct-to-Earth (DTE) radio links, speed-of-light delays, and orbiter proximity-1 relays.</p>
+                </div>
+                <button className="closebtn" onClick={() => setCommsOpen(false)} aria-label="Close Comms Console">✕</button>
+              </div>
+
+              <div className="comms-grid">
+                <div className="comms-card">
+                  <div className="comms-card-top">
+                    <span className="comms-tag">DTE High-Gain Downlink</span>
+                    <span className={`signal-dot signal-${envMode}`} />
+                  </div>
+                  <div className="comms-val" style={{ color: envMode === 'spe' ? '#e5484d' : envMode === 'dust' ? '#f2c14e' : '#38bdf8' }}>
+                    {envMode === 'spe' ? '8.0 kbps' : envMode === 'dust' ? '128 kbps' : '2,048 kbps (2.05 Mbps)'}
+                  </div>
+                  <p className="comms-sub">Ka-Band (32.05 GHz) via 70m Goldstone DSS-14 · SNR +4.8 dB</p>
+                </div>
+
+                <div className="comms-card">
+                  <div className="comms-card-top">
+                    <span className="comms-tag">DTE Command Uplink</span>
+                    <span className="signal-dot signal-nominal" />
+                  </div>
+                  <div className="comms-val">32.0 kbps</div>
+                  <p className="comms-sub">X-Band (7.18 GHz) · 20 kW Transmitter · LDPC Encoded</p>
+                </div>
+
+                <div className="comms-card">
+                  <div className="comms-card-top">
+                    <span className="comms-tag">Orbital Relay (Electra UHF)</span>
+                    <span className="signal-dot signal-nominal" />
+                  </div>
+                  <div className="comms-val" style={{ color: '#5fd38d' }}>2,048 kbps</div>
+                  <p className="comms-sub">MRO &amp; TGO Proximity-1 (400 MHz) · 14m Pass Window</p>
+                </div>
+
+                <div className="comms-card">
+                  <div className="comms-card-top">
+                    <span className="comms-tag">Local Surface EVA Mesh</span>
+                    <span className="signal-dot signal-nominal" />
+                  </div>
+                  <div className="comms-val" style={{ color: '#56b4e9' }}>10.0 Mbps</div>
+                  <p className="comms-sub">Hab-to-Suit VHF Mesh · 11.7 km Topographic Radio Horizon</p>
+                </div>
+              </div>
+
+              <div className="comms-telemetry-box">
+                <div className="tele-row">
+                  <span>Earth–Mars Orbital Separation</span>
+                  <b>{distKm.toLocaleString()} km ({distAu} AU)</b>
+                </div>
+                <div className="tele-row">
+                  <span>One-Way Light Time (OWLT)</span>
+                  <b>{owltStr} ({owltSec}s)</b>
+                </div>
+                <div className="tele-row">
+                  <span>Round-Trip Light Time (RTLT)</span>
+                  <b>{Math.floor((owltSec * 2) / 60)}m {String((owltSec * 2) % 60).padStart(2, '0')}s</b>
+                </div>
+                <div className="tele-row">
+                  <span>Active DSN Ground Complex</span>
+                  <b>DSS-14 Goldstone (70-meter dish, California)</b>
+                </div>
+                <div className="tele-row">
+                  <span>Daily Science Bandwidth Allocation</span>
+                  <b>1.45 GB / sol (1.18 GB Downlinked · 81% Complete)</b>
+                </div>
+              </div>
+
+              <div className="comms-sim-bar">
+                <label>Simulate Environmental Bandwidth Impact:</label>
+                <div className="comms-sim-btns">
+                  <button
+                    className="cleanbtn comms-chip"
+                    aria-pressed={envMode === 'nominal'}
+                    onClick={() => { playTick(sfxRef.current, 1380, 0.014); setEnvMode('nominal') }}
+                  >
+                    Nominal (2.05 Mbps)
+                  </button>
+                  <button
+                    className="cleanbtn comms-chip"
+                    aria-pressed={envMode === 'dust'}
+                    onClick={() => { playTick(sfxRef.current, 1340, 0.014); setEnvMode('dust') }}
+                  >
+                    Dust Storm (128 kbps)
+                  </button>
+                  <button
+                    className="cleanbtn comms-chip"
+                    aria-pressed={envMode === 'spe'}
+                    onClick={() => { playTick(sfxRef.current, 1260, 0.014); setEnvMode('spe') }}
+                  >
+                    Solar Particle Event (8 kbps)
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </>
