@@ -13,8 +13,9 @@ from terrain import DEM, PIXEL_M, render_mola_tile, render_mola_heightmap
 from geochem import ELEMENTS, load_grs_dataset
 
 dist = root / "frontend" / "dist"
+dist.mkdir(parents=True, exist_ok=True)
 (dist / ".nojekyll").write_text("")
-api_dir = dist / "api"
+api_dir = root / "frontend" / "public" / "api"
 api_dir.mkdir(parents=True, exist_ok=True)
 
 # 1. Build 90x180 (2 deg) elevation & slope grids + geochem grids
