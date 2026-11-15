@@ -42,7 +42,7 @@ html, body, #root {
   will-change: transform;
 }
 .globe.globe-landing {
-  transform: translateX(18vw) scale(1.08);
+  transform: translateX(18vw);
 }
 .globe.dust-haze canvas { filter: sepia(0.38) saturate(1.45) contrast(0.92) brightness(0.9); }
 .globe.spe-haze canvas { filter: hue-rotate(-14deg) saturate(1.35) contrast(1.06); }
@@ -57,7 +57,6 @@ html, body, #root {
     radial-gradient(circle at 74% 48%, rgba(255, 85, 32, 0.14) 0%, rgba(168, 85, 247, 0.06) 32%, transparent 64%),
     radial-gradient(circle at 18% 22%, rgba(0, 240, 255, 0.08) 0%, transparent 48%),
     radial-gradient(circle at 26% 82%, rgba(52, 211, 153, 0.07) 0%, transparent 46%);
-  animation: auroraDrift 14s ease-in-out infinite alternate;
 }
 
 /* ==========================================

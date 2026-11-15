@@ -4,7 +4,7 @@ import gsap from 'gsap'
 import { resolveStaticApi } from './staticFallback.js'
 
 const IS_STATIC_HOST =
-  typeof window !== 'undefined' && /\.github\.io$/i.test(window.location.hostname)
+  typeof window !== 'undefined' && !/^(localhost|127\.0\.0\.1)$/i.test(window.location.hostname)
 
 function EarthClock({ simMs }) {
   const [t, setT] = useState(() => Date.now())
@@ -69,7 +69,9 @@ function createMolaTerrainProvider(scale = 2.0) {
     tilingScheme: new Cesium.GeographicTilingScheme({ ellipsoid: MARS }),
     credit: 'NASA MGS MOLA 32ppd 3D Mesh',
     callback: (x, y, level) => {
-      const z = Math.min(level, IS_STATIC_HOST ? 1 : 7)
+      const maxZ = IS_STATIC_HOST ? 1 : 7
+      if (level > maxZ) return undefined
+      const z = level
       const sKey = `${scale}/${z}/${y}/${x}`
       const hit = _scaledHmapCache.get(sKey)
       if (hit) return hit
@@ -1376,9 +1378,13 @@ export default function App() {
     const v = viewerRef.current
     if (!v || !intro || visor) return
     let rafId = 0
-    const spin = () => {
-      v.camera.rotateRight(0.00055)
-      v.scene.requestRender()
+    let last = 0
+    const spin = now => {
+      if (!document.hidden && now - last >= 33) {
+        last = now
+        v.camera.rotateRight(0.00095)
+        v.scene.requestRender()
+      }
       rafId = requestAnimationFrame(spin)
     }
     rafId = requestAnimationFrame(spin)
