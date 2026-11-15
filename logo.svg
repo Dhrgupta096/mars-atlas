@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" fill="none">
+  <defs>
+    <clipPath id="globeClip">
+      <circle cx="100" cy="100" r="68"/>
+    </clipPath>
+  </defs>
+  <!-- Outer dark globe base -->
+  <circle cx="100" cy="100" r="68" fill="#0d0a09" stroke="#f0cfa0" stroke-width="2.5"/>
+  <!-- Upper-right terracotta Mars crescent shading -->
+  <g clip-path="url(#globeClip)">
+    <path d="M 92 26 C 145 26 176 62 172 108 C 148 118 118 112 100 94 C 84 78 80 50 92 26 Z" fill="#d96b34"/>
+    <path d="M 122 28 C 158 42 176 74 170 110 C 150 112 132 100 124 80 C 118 62 118 42 122 28 Z" fill="#b34926"/>
+  </g>
+  <!-- Concentric radar rings -->
+  <circle cx="100" cy="100" r="52" stroke="#f0cfa0" stroke-width="2.2"/>
+  <circle cx="100" cy="100" r="34" stroke="#f0cfa0" stroke-width="2.2"/>
+  <!-- Crosshairs -->
+  <line x1="100" y1="32" x2="100" y2="168" stroke="#f0cfa0" stroke-width="2.2"/>
+  <line x1="32" y1="100" x2="168" y2="100" stroke="#f0cfa0" stroke-width="2.2"/>
+  <!-- Center hub -->
+  <circle cx="100" cy="100" r="11" fill="#f0cfa0"/>
+  <!-- Tilted double-outline orbital ring -->
+  <g transform="rotate(-32 100 100)">
+    <ellipse cx="100" cy="100" rx="88" ry="11" stroke="#0d0a09" stroke-width="8"/>
+    <ellipse cx="100" cy="100" rx="88" ry="11" stroke="#f0cfa0" stroke-width="3.2"/>
+  </g>
+</svg>
