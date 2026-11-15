@@ -2484,7 +2484,7 @@ export default function App() {
 
       {!intro && !visor && !cleanUi && (
         <aside
-          className={`ui-compass${(preview || cuff || routeData || baseNodes.length > 0 || layer === 'Elements') ? ' ui-compass--shifted' : ''}`}
+          className="ui-compass"
           role="region"
           aria-label="Martian 3D Compass & Heading"
         >
